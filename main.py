@@ -153,6 +153,30 @@ def generate_type_struct(body: dict, type_dict: Dict[str, dict]) -> ASTType:
     elif "oneOf" in body:
         props = body["oneOf"]
         return generate_oneof(props, type_dict)
+    elif "properties" in body:
+        props = body["properties"]
+        ret = generate_type_struct_body(
+            body,
+            props,
+            type_dict,
+        )
+        if "patternProperties" in body:
+            pattern = body["patternProperties"]
+            log.warning("Both patternProperties and properties found, using properties")
+            contains_object = None
+            for k in pattern:
+                elt = pattern[k]
+                if "type" in elt and elt["type"] == "object":
+                    contains_object = elt
+            if contains_object:
+                k = generate_type_pattern_body(
+                    pattern,
+                    contains_object,
+                    type_dict,
+                )
+                member = ASTMember("WILDCARD", k)
+                ret.add_member(member)
+        return ret
     elif "patternProperties" in body:
         pattern = body["patternProperties"]
         if "properties" in body:
@@ -169,13 +193,6 @@ def generate_type_struct(body: dict, type_dict: Dict[str, dict]) -> ASTType:
                 type_dict,
             )
         return ASTType(ASTNodeEnum.KEY_VALUE_SET, "kvs")
-    elif "properties" in body:
-        props = body["properties"]
-        return generate_type_struct_body(
-            body,
-            props,
-            type_dict,
-        )
     else:
         props = {}
         return generate_type_struct_body(
