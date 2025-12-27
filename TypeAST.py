@@ -362,7 +362,7 @@ class ASTType:
         self.remove_duplicate_enums()
         self.fix_members_with_same_name_different_types()
 
-    def generate_enum(self, fp):
+    def generate_enum(self, fp, fpc):
         fp.write(f"enum class {self.name} {{\n")
         comma = ""
         for e in self.members:
@@ -370,9 +370,9 @@ class ASTType:
             comma = ","
         fp.write("};\n\n")
 
-    def generate_obj(self, fp):
+    def generate_obj(self, fp, fpc):
         for elt in self.members:
-            elt.type.write_types(fp)
+            elt.type.write_types(fp, fpc)
 
         fp.write(f"struct {self.name} {{\n")
         for elt in self.members:
@@ -385,42 +385,42 @@ class ASTType:
 
         fp.write(f"}}; // {self.name}\n\n")
 
-    def generate_array(self, fp):
-        self.members[0].type.write_types(fp)
+    def generate_array(self, fp, fpc):
+        self.members[0].type.write_types(fp, fpc)
         elts = self.members[0].type.name
         fp.write(f"using {self.name} = std::vector<{elts}>;\n")
 
-    def generate_anyof(self, fp):
+    def generate_anyof(self, fp, fpc):
         for elt in self.members:
-            elt.type.write_types(fp)
+            elt.type.write_types(fp, fpc)
 
         fp.write(f"struct {self.name} {{\n")
         for elt in self.members:
             fp.write(f"\tstd::optional<{elt.type.name}> _{elt.name}; // {elt.orig_name}\n")
         fp.write(f"}}; // {self.name}\n\n")
 
-    def generate_pattern(self, fp):
+    def generate_pattern(self, fp, fpc):
         elt_names = ""
         comma = ""
         for elt in self.members:
-            elt.type.write_types(fp)
+            elt.type.write_types(fp, fpc)
             elt_names += f"{comma}{elt.type.name}"
             comma = ", "
 
         fp.write(f"using {self.name} = std::map<std::string, std::vector<std::variant<{elt_names}>>>;\n")
 
-    def generate_allof(self, fp):
+    def generate_allof(self, fp, fpc):
         for elt in self.members:
-            elt.type.write_types(fp)
+            elt.type.write_types(fp, fpc)
 
         fp.write(f"struct {self.name} {{\n")
         for elt in self.members:
             fp.write(f"\t{elt.type.name} _{elt.name};  // {elt.orig_name}\n")
         fp.write(f"}}; // {self.name}\n\n")
 
-    def generate_oneof(self, fp):
+    def generate_oneof(self, fp, fpc):
         for elt in self.members:
-            elt.type.write_types(fp)
+            elt.type.write_types(fp, fpc)
 
         comma = ""
         fp.write(f"using {self.name} = std::variant<")
@@ -429,163 +429,166 @@ class ASTType:
             comma = ", "
         fp.write(">;\n")
 
-    def write_types(self, fp):
+    def write_types(self, fp, fpc):
         if self.generated_type_already:
             return
         self.generated_type_already = True
         match self.t:
             case ASTNodeEnum.OBJECT:
-                self.generate_obj(fp)
+                self.generate_obj(fp, fpc)
             case ASTNodeEnum.ARRAY:
-                self.generate_array(fp)
+                self.generate_array(fp, fpc)
             case ASTNodeEnum.ANY_OF:
-                self.generate_anyof(fp)
+                self.generate_anyof(fp, fpc)
             case ASTNodeEnum.PATTERN_PROPERTIES:
-                self.generate_pattern(fp)
+                self.generate_pattern(fp, fpc)
             case ASTNodeEnum.ONE_OF:
-                self.generate_oneof(fp)
+                self.generate_oneof(fp, fpc)
             case ASTNodeEnum.ALL_OF:
-                self.generate_allof(fp)
+                self.generate_allof(fp, fpc)
             case ASTNodeEnum.ENUM:
-                self.generate_enum(fp)
+                self.generate_enum(fp, fpc)
             case ASTNodeEnum.ENUM_ENTRY:
                 raise RuntimeError("unhandled")
 
     def is_inline(self):
         return self.members[0].name.startswith("_field_")
 
-    def _generic_serialize(self, fp):
+    def _generic_serialize(self, fp, fpc):
         if len(self.members) == 0:
-            fp.write(f"static std::string serialize(const {self.name}& ) {{\n")
-            fp.write("  // type has no members\n")
-            fp.write("  return \"{}\";\n")
-            fp.write("}\n")
-            fp.write("\n")
+            fp.write(f"static std::string serialize(const {self.name}& );\n")
+            fpc.write(f"std::string Endpoint::serialize(const {self.name}& ) {{\n")
+            fpc.write("  // type has no members\n")
+            fpc.write("  return \"{}\";\n")
+            fpc.write("}\n")
+            fpc.write("\n")
             return;
 
         for elt in self.members:
-            elt.type.write_serializers(fp)
+            elt.type.write_serializers(fp, fpc)
 
-        fp.write(f"static std::string serialize(const {self.name}& obj) {{\n")
+        fp.write(f"static std::string serialize(const {self.name}& obj);\n")
+        fpc.write(f"std::string Endpoint::serialize(const {self.name}& obj) {{\n")
 
-        fp.write('  std::string ret;\n')
-        fp.write('  std::string comma;\n')
+        fpc.write('  std::string ret;\n')
+        fpc.write('  std::string comma;\n')
 
         if self.is_inline():
             for elt in self.members:
-                fp.write(f'  if (const auto k = serialize(obj._{elt.name}); k != "") {{\n')
-                fp.write('     ret += comma;\n')
-                fp.write('     comma = ", ";\n')
-                fp.write(f'     ret += k;\n')
-                fp.write('  }\n')
+                fpc.write(f'  if (const auto k = serialize(obj._{elt.name}); k != "") {{\n')
+                fpc.write('     ret += comma;\n')
+                fpc.write('     comma = ", ";\n')
+                fpc.write(f'     ret += k;\n')
+                fpc.write('  }\n')
         else:
-            fp.write('  ret += "{";\n')
+            fpc.write('  ret += "{";\n')
             for elt in self.members:
-                fp.write(f'  if (const auto k = serialize(obj._{elt.name}); k != "") {{\n')
-                fp.write('     ret += comma;\n')
-                fp.write('     comma = ", ";\n')
-                fp.write(f'     ret += "\\\"{elt.orig_name}\\\":" + k;\n')
-                fp.write('  }\n')
-            fp.write('  ret += "}";\n')
-        fp.write('  return ret;\n')
-        fp.write("}\n")
-        fp.write("\n")
+                fpc.write(f'  if (const auto k = serialize(obj._{elt.name}); k != "") {{\n')
+                fpc.write('     ret += comma;\n')
+                fpc.write('     comma = ", ";\n')
+                fpc.write(f'     ret += "\\\"{elt.orig_name}\\\":" + k;\n')
+                fpc.write('  }\n')
+            fpc.write('  ret += "}";\n')
+        fpc.write('  return ret;\n')
+        fpc.write("}\n")
+        fpc.write("\n")
 
-    def generate_obj_serializer(self, fp):
-        self._generic_serialize(fp)
+    def generate_obj_serializer(self, fp, fpc):
+        self._generic_serialize(fp, fpc)
 
-    def generate_allof_serializer(self, fp):
-        self._generic_serialize(fp)
+    def generate_allof_serializer(self, fp, fpc):
+        self._generic_serialize(fp, fpc)
 
-    def generate_anyof_serializer(self, fp):
-        self._generic_serialize(fp)
+    def generate_anyof_serializer(self, fp, fpc):
+        self._generic_serialize(fp, fpc)
 
-    def generate_pattern_serializer(self, fp):
+    def generate_pattern_serializer(self, fp, fpc):
         for elt in self.members:
-            elt.type.write_serializers(fp)
+            elt.type.write_serializers(fp, fpc)
 
-        fp.write(f"static std::string serialize(const {self.name}& map) {{\n")
-        fp.write('  std::string ret = "{";\n')
-        fp.write('  const char* comma = "";\n')
-        fp.write('  for (const auto& [key, values] : map) {\n')
-        fp.write('    ret += comma;\n')
-        fp.write('    ret += "\\""+key+"\\":{\";\n')
-
-        fp.write('    const char* comma2 = "";\n')
-        fp.write('    for (const auto& val : values) {\n')
-        fp.write('      ret += comma2;\n')
-
+        fp.write(f"static std::string serialize(const {self.name}& map);\n")
+        fpc.write(f"std::string Endpoint::serialize(const {self.name}& map) {{\n")
+        fpc.write('  std::string ret = "{";\n')
+        fpc.write('  const char* comma = "";\n')
+        fpc.write('  for (const auto& [key, values] : map) {\n')
+        fpc.write('    ret += comma;\n')
+        fpc.write('    ret += "\\""+key+"\\":{\";\n')
+        fpc.write('    const char* comma2 = "";\n')
+        fpc.write('    for (const auto& val : values) {\n')
+        fpc.write('      ret += comma2;\n')
         ix = 0;
-        fp.write('      switch (val.index()) {\n')
+        fpc.write('      switch (val.index()) {\n')
         for elt in self.members:
-            fp.write(f'      case {ix}: {{\n')
-            fp.write(f'         const auto val_str = serialize(std::get<{ix}>(val));\n')
-            fp.write(f'         ret += "\\"{elt.name}\\":" + val_str;\n')
-            fp.write('          comma2 = ", ";\n')
-            fp.write('          break;\n')
-            fp.write('      }\n')
+            fpc.write(f'      case {ix}: {{\n')
+            fpc.write(f'         const auto val_str = serialize(std::get<{ix}>(val));\n')
+            fpc.write(f'         ret += "\\"{elt.name}\\":" + val_str;\n')
+            fpc.write('          comma2 = ", ";\n')
+            fpc.write('          break;\n')
+            fpc.write('      }\n')
             ix += 1
-        fp.write(f'          default: fprintf(stderr, "variant default case: {self.name}\\n"); abort();\n')
-        fp.write('      } // switch\n')
-        #fp.write('    ret += "}";\n')
-        fp.write('    comma = ", ";\n')
-        fp.write("  } // for values\n")
-        fp.write('  ret += "}";\n')
-        fp.write("  } // for map\n")
-        fp.write('  ret += "}";\n')
-        fp.write('  return ret;\n')
-        fp.write("}\n")
-        fp.write("\n")
+        fpc.write(f'          default: fprintf(stderr, "variant default case: {self.name}\\n"); abort();\n')
+        fpc.write('      } // switch\n')
+        #fcp.write('    ret += "}";\n')
+        fpc.write('    comma = ", ";\n')
+        fpc.write("  } // for values\n")
+        fpc.write('  ret += "}";\n')
+        fpc.write("  } // for map\n")
+        fpc.write('  ret += "}";\n')
+        fpc.write('  return ret;\n')
+        fpc.write("}\n")
+        fpc.write("\n")
 
-    def generate_oneof_serializer(self, fp):
+    def generate_oneof_serializer(self, fp, fpc):
         for elt in self.members:
-            elt.type.write_serializers(fp)
+            elt.type.write_serializers(fp, fpc)
 
-        fp.write(f"static std::string serialize(const {self.name}& obj) {{\n")
-        fp.write('  switch(obj.index()) {\n')
+        fp.write(f"static std::string serialize(const {self.name}& obj);\n")
+        fpc.write(f"std::string Endpoint::serialize(const {self.name}& obj) {{\n")
+        fpc.write('  switch(obj.index()) {\n')
 
         for i in range(len(self.members)):
             m = self.members[i]
-            fp.write(f'  case {i}: \n')
-            fp.write(f'      return serialize(std::get<{i}>(obj));\n')
+            fpc.write(f'  case {i}: \n')
+            fpc.write(f'      return serialize(std::get<{i}>(obj));\n')
 
-        fp.write("  }\n")
-        fp.write('  INTERNAL_ERROR("internal error");\n')
-        fp.write("}\n")
-        fp.write("\n")
+        fpc.write("  }\n")
+        fpc.write('  INTERNAL_ERROR("internal error");\n')
+        fpc.write("}\n")
+        fpc.write("\n")
 
 
 
-    def generate_enum_serializer(self, fp):
-        fp.write(f"static std::string serialize(const {self.name}& obj) {{\n")
-        fp.write("  switch (obj) {\n")
+    def generate_enum_serializer(self, fp, fpc):
+        fp.write(f"static std::string serialize(const {self.name}& obj);\n")
+        fpc.write(f"std::string Endpoint::serialize(const {self.name}& obj) {{\n")
+        fpc.write("  switch (obj) {\n")
         for elt in self.members:
             value = elt.value
-            fp.write(f'      case {self.name}::e_{elt.name}: return "\\"{value}\\"";\n')
-        fp.write("  }\n")
-        fp.write('  return "internal error: enum not in case list";\n')
-        fp.write("}\n")
-        fp.write("\n")
+            fpc.write(f'      case {self.name}::e_{elt.name}: return "\\"{value}\\"";\n')
+        fpc.write("  }\n")
+        fpc.write('  return "internal error: enum not in case list";\n')
+        fpc.write("}\n")
+        fpc.write("\n")
 
-    def write_serializers(self, fp):
+    def write_serializers(self, fp, fpc):
         if self.generated_serializer_already:
             return
         self.generated_serializer_already = True
         match self.t:
             case ASTNodeEnum.OBJECT:
-                self.generate_obj_serializer(fp)
+                self.generate_obj_serializer(fp, fpc)
             case ASTNodeEnum.ARRAY:
-                self.members[0].type.write_serializers(fp)
+                self.members[0].type.write_serializers(fp, fpc)
             case ASTNodeEnum.PATTERN_PROPERTIES:
-                self.generate_pattern_serializer(fp)
+                self.generate_pattern_serializer(fp, fpc)
             case ASTNodeEnum.ANY_OF:
-                self.generate_anyof_serializer(fp)
+                self.generate_anyof_serializer(fp, fpc)
             case ASTNodeEnum.ONE_OF:
-                self.generate_oneof_serializer(fp)
+                self.generate_oneof_serializer(fp, fpc)
             case ASTNodeEnum.ALL_OF:
-                self.generate_allof_serializer(fp)
+                self.generate_allof_serializer(fp, fpc)
             case ASTNodeEnum.ENUM:
-                self.generate_enum_serializer(fp)
+                self.generate_enum_serializer(fp, fpc)
             case _:
                 pass
 
@@ -602,168 +605,188 @@ class ASTType:
         return False
 
 
-    def generate_obj_deserializer(self, fp):
+    def generate_obj_deserializer(self, fp, fpc):
         assert self.t != ASTNodeEnum.ANY_OF
 
         for elt in self.members:
-            elt.type.write_deserializers(fp)
+            elt.type.write_deserializers(fp, fpc)
 
         fp.write(
-            f" [[maybe_unused]] static void deserialize([[maybe_unused]] {self.name}& obj, [[maybe_unused]] const json& payload) {{\n"
+            f" [[maybe_unused]] static void deserialize([[maybe_unused]] {self.name}& obj, [[maybe_unused]] const json& payload);\n"
+        )
+        fpc.write(
+            f" [[maybe_unused]] void Endpoint::deserialize([[maybe_unused]] {self.name}& obj, [[maybe_unused]] const json& payload) {{\n"
         )
 
         for elt in self.members:
             if elt.type.is_format():
-                fp.write(
+                fpc.write(
                     f"	obj._{elt.name} = decltype(obj._{elt.name})::value_type {{}};\n"
                 )
-                fp.write(f'	deserialize(obj._{elt.name}.value(), payload);\n')
+                fpc.write(f'	deserialize(obj._{elt.name}.value(), payload);\n')
             else:
-                fp.write(f'  if (payload.contains("{elt.orig_name}")) {{\n')
+                fpc.write(f'  if (payload.contains("{elt.orig_name}")) {{\n')
                 if elt.default_value == None:
-                    fp.write(
+                    fpc.write(
                         f"	obj._{elt.name} = decltype(obj._{elt.name})::value_type {{}};\n"
                     )
-                    fp.write(f'	deserialize(obj._{elt.name}.value(), payload["{elt.orig_name}"]);\n')
+                    fpc.write(f'	deserialize(obj._{elt.name}.value(), payload["{elt.orig_name}"]);\n')
                 else:
-                    fp.write(f'	deserialize(obj._{elt.name}, payload["{elt.orig_name}"]);\n')
-                fp.write('   }\n')
-        fp.write("}\n")
-        fp.write("\n")
+                    fpc.write(f'	deserialize(obj._{elt.name}, payload["{elt.orig_name}"]);\n')
+                fpc.write('   }\n')
+        fpc.write("}\n")
+        fpc.write("\n")
 
-    def generate_pattern_deserializer(self, fp):
+    def generate_pattern_deserializer(self, fp, fpc):
         for elt in self.members:
-            elt.type.write_deserializers(fp)
-        fp.write(
-            f" [[maybe_unused]] static void deserialize([[maybe_unused]] {self.name}& pattern_obj, [[maybe_unused]] const json& pattern_payload) {{\n"
-        )
-
-        fp.write('  for (auto pit = pattern_payload.begin(); pit != pattern_payload.end(); ++pit) {\n')
-        fp.write(f'{self.name}::mapped_type values;\n')
-
-        for elt in self.members:
-            fp.write(f'  if (const auto& found = pit->find("{elt.name}"); found != pit->end()) {{\n')
-            fp.write(f'    {elt.type.name} val {{}};\n')
-            fp.write('    deserialize(val, *found);\n')
-            fp.write('    values.push_back(val);\n')
-            fp.write("  }\n")
-
-        fp.write(f'    pattern_obj[pit.key()] = values;\n')
-        fp.write("} // pit\n")
-        fp.write("}\n")
-        fp.write("\n")
-
-    def generate_anyof_deserializer(self, fp):
-        for elt in self.members:
-            elt.type.write_deserializers(fp)
+            elt.type.write_deserializers(fp, fpc)
 
         fp.write(
-            f" [[maybe_unused]] static void deserialize([[maybe_unused]] {self.name}& obj, [[maybe_unused]] const json& payload) {{\n"
+            f" [[maybe_unused]] static void deserialize([[maybe_unused]] {self.name}& pattern_obj, [[maybe_unused]] const json& pattern_payload);\n"
         )
 
-        fp.write("[[maybe_unused]] bool done = false;\n")
+        fpc.write(
+            f" [[maybe_unused]] void Endpoint::deserialize([[maybe_unused]] {self.name}& pattern_obj, [[maybe_unused]] const json& pattern_payload) {{\n"
+        )
+
+        fpc.write('  for (auto pit = pattern_payload.begin(); pit != pattern_payload.end(); ++pit) {\n')
+        fpc.write(f'{self.name}::mapped_type values;\n')
 
         for elt in self.members:
-            fp.write("try {\n")
+            fpc.write(f'  if (const auto& found = pit->find("{elt.name}"); found != pit->end()) {{\n')
+            fpc.write(f'    {elt.type.name} val {{}};\n')
+            fpc.write('    deserialize(val, *found);\n')
+            fpc.write('    values.push_back(val);\n')
+            fpc.write("  }\n")
+
+        fpc.write(f'    pattern_obj[pit.key()] = values;\n')
+        fpc.write("} // pit\n")
+        fpc.write("}\n")
+        fpc.write("\n")
+
+    def generate_anyof_deserializer(self, fp, fpc):
+        for elt in self.members:
+            elt.type.write_deserializers(fp, fpc)
+
+        fp.write(
+            f" [[maybe_unused]] static void deserialize([[maybe_unused]] {self.name}& obj, [[maybe_unused]] const json& payload);\n"
+        )
+
+        fpc.write(
+            f" [[maybe_unused]] void Endpoint::deserialize([[maybe_unused]] {self.name}& obj, [[maybe_unused]] const json& payload) {{\n"
+        )
+
+        fpc.write("[[maybe_unused]] bool done = false;\n")
+
+        for elt in self.members:
+            fpc.write("try {\n")
 
             # anyof <format1,2,3> actually means
             # oneof..
             if elt.type.is_format():
-                fp.write("if (! done) {")
-                fp.write(
+                fpc.write("if (! done) {")
+                fpc.write(
                     f"	obj._{elt.name} = decltype(obj._{elt.name})::value_type {{}};\n"
                 )
-                fp.write(f'	deserialize(obj._{elt.name}.value(), payload);\n')
-                fp.write(f'	done = true;\n')
-                fp.write('	}\n')
+                fpc.write(f'	deserialize(obj._{elt.name}.value(), payload);\n')
+                fpc.write(f'	done = true;\n')
+                fpc.write('	}\n')
             else:
-                fp.write(f'  if (payload.contains("{elt.orig_name}")) {{\n')
+                fpc.write(f'  if (payload.contains("{elt.orig_name}")) {{\n')
                 if elt.default_value == None:
-                    fp.write(
+                    fpc.write(
                         f"	obj._{elt.name} = decltype(obj._{elt.name})::value_type {{}};\n"
                     )
-                    fp.write(f'	deserialize(obj._{elt.name}.value(), payload["{elt.orig_name}"]);\n')
+                    fpc.write(f'	deserialize(obj._{elt.name}.value(), payload["{elt.orig_name}"]);\n')
                 else:
-                    fp.write(f'	deserialize(obj._{elt.name}, payload["{elt.orig_name}"]);\n')
-                fp.write('   }\n')
+                    fpc.write(f'	deserialize(obj._{elt.name}, payload["{elt.orig_name}"]);\n')
+                fpc.write('   }\n')
 
-            fp.write("  } catch (const ParseError& e) {\n")
-            fp.write(f"   obj._{elt.name} = std::nullopt;\n")
-            fp.write("}\n")
-        fp.write("}\n")
-        fp.write("\n")
+            fpc.write("  } catch (const ParseError& e) {\n")
+            fpc.write(f"   obj._{elt.name} = std::nullopt;\n")
+            fpc.write("}\n")
+        fpc.write("}\n")
+        fpc.write("\n")
 
-    def generate_allof_deserializer(self, fp):
+    def generate_allof_deserializer(self, fp, fpc):
         for elt in self.members:
-            elt.type.write_deserializers(fp)
+            elt.type.write_deserializers(fp, fpc)
 
         fp.write(
-            f" [[maybe_unused]] static void deserialize([[maybe_unused]] {self.name}& obj, [[maybe_unused]] const json& payload) {{\n"
+            f" [[maybe_unused]] static void deserialize([[maybe_unused]] {self.name}& obj, [[maybe_unused]] const json& payload);\n"
+        )
+        fpc.write(
+            f" [[maybe_unused]] void Endpoint::deserialize([[maybe_unused]] {self.name}& obj, [[maybe_unused]] const json& payload) {{\n"
         )
         for elt in self.members:
-            fp.write(f'  if (payload.contains("{elt.name}")) {{\n')
-            fp.write(f'	    deserialize(obj._{elt.name}, payload["{elt.name}"]);\n')
-            fp.write('   }\n')
+            fpc.write(f'  if (payload.contains("{elt.name}")) {{\n')
+            fpc.write(f'	    deserialize(obj._{elt.name}, payload["{elt.name}"]);\n')
+            fpc.write('   }\n')
+        fpc.write("}\n")
+        fpc.write("\n")
 
-        fp.write("}\n")
-        fp.write("\n")
-
-    def generate_oneof_deserializer(self, fp):
+    def generate_oneof_deserializer(self, fp, fpc):
         for elt in self.members:
-            elt.type.write_deserializers(fp)
+            elt.type.write_deserializers(fp, fpc)
 
         fp.write(
-            f" [[maybe_unused]] static void deserialize([[maybe_unused]] {self.name}& obj, [[maybe_unused]] const json& payload) {{\n"
+            f" [[maybe_unused]] static void deserialize([[maybe_unused]] {self.name}& obj, [[maybe_unused]] const json& payload);\n"
+        )
+        fpc.write(
+            f" [[maybe_unused]] void Endpoint::deserialize([[maybe_unused]] {self.name}& obj, [[maybe_unused]] const json& payload) {{\n"
         )
         for elt in self.members:
-            fp.write("  try {\n")
-            fp.write(f"      {elt.type.name} val {{}};\n")
-            fp.write("      deserialize(val, payload);\n")
-            fp.write("      obj = val;\n")
-            fp.write("      return;\n")
-            fp.write("  } catch (const ParseError& e) {\n")
-            fp.write(f'       fprintf(stderr, "was not alt {elt.name}\\n");\n')
-            fp.write("  }\n")
-        fp.write(f'  THROW_ERROR("failed to parse {self.name}");\n')
-        fp.write("}\n")
-        fp.write("\n")
+            fpc.write("  try {\n")
+            fpc.write(f"      {elt.type.name} val {{}};\n")
+            fpc.write("      deserialize(val, payload);\n")
+            fpc.write("      obj = val;\n")
+            fpc.write("      return;\n")
+            fpc.write("  } catch (const ParseError& e) {\n")
+            fpc.write(f'       fprintf(stderr, "was not alt {elt.name}\\n");\n')
+            fpc.write("  }\n")
+        fpc.write(f'  THROW_ERROR("failed to parse {self.name}");\n')
+        fpc.write("}\n")
+        fpc.write("\n")
 
 
-    def generate_enum_deserializer(self, fp):
+    def generate_enum_deserializer(self, fp, fpc):
         fp.write(
-            f" [[maybe_unused]] static void deserialize([[maybe_unused]] {self.name}& obj, [[maybe_unused]] const json& payload) {{\n"
+            f" [[maybe_unused]] static void deserialize([[maybe_unused]] {self.name}& obj, [[maybe_unused]] const json& payload);\n"
+        )
+        fpc.write(
+            f" [[maybe_unused]] void Endpoint::deserialize([[maybe_unused]] {self.name}& obj, [[maybe_unused]] const json& payload) {{\n"
         )
         for elt in self.members:
             value = elt.value
-            fp.write(
+            fpc.write(
                 f'	if (payload.dump() == "\\"{value}\\"") {{ obj = {self.name}::e_{elt.name}; return; }}\n'
             )
-        fp.write(
+        fpc.write(
             '	THROW_ERROR("failed to find enum value for:" + payload.dump());\n'
         )
-        fp.write("}\n")
-        fp.write("\n")
+        fpc.write("}\n")
+        fpc.write("\n")
 
-    def write_deserializers(self, fp):
+    def write_deserializers(self, fp, fpc):
         if self.generated_deserializer_already:
             return
         self.generated_deserializer_already = True
         match self.t:
             case ASTNodeEnum.OBJECT:
-                self.generate_obj_deserializer(fp)
+                self.generate_obj_deserializer(fp, fpc)
             case ASTNodeEnum.ARRAY:
                 # handled via template method
-                self.members[0].type.write_deserializers(fp)
+                self.members[0].type.write_deserializers(fp, fpc)
             case ASTNodeEnum.ANY_OF:
-                self.generate_anyof_deserializer(fp)
+                self.generate_anyof_deserializer(fp, fpc)
             case ASTNodeEnum.PATTERN_PROPERTIES:
-                self.generate_pattern_deserializer(fp)
+                self.generate_pattern_deserializer(fp, fpc)
             case ASTNodeEnum.ONE_OF:
-                self.generate_oneof_deserializer(fp)
+                self.generate_oneof_deserializer(fp, fpc)
             case ASTNodeEnum.ALL_OF:
-                self.generate_allof_deserializer(fp)
+                self.generate_allof_deserializer(fp, fpc)
             case ASTNodeEnum.ENUM:
-                self.generate_enum_deserializer(fp)
+                self.generate_enum_deserializer(fp, fpc)
             case _:
                 pass
 

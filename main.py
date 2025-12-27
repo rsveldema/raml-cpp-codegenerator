@@ -75,8 +75,9 @@ class Method:
 
 
 class Endpoint:
-    def __init__(self, file: str, elt: str, data: dict) -> None:
-        self.file = file
+    def __init__(self, header_file: str, impl_file: str, elt: str, data: dict) -> None:
+        self.header_file = header_file
+        self.impl_file = impl_file
         self.path = elt
         self.data = data
         self.methods: List[Method] = []
@@ -415,6 +416,7 @@ def generate_type_as_single_string(body, type_dict: Dict[str, dict]) -> ASTType:
 
 def generated_types(
     fp,
+    fpc,
     data: dict,
     elt: str,
     type_dict: Dict[str, dict],
@@ -434,9 +436,9 @@ def generated_types(
 
         ast = generate_type_as_single_string(body, type_dict)
         ast.normalize()
-        ast.write_types(forwarding_fp)
-        ast.write_serializers(forwarding_fp)
-        ast.write_deserializers(forwarding_fp)
+        ast.write_types(forwarding_fp, fpc)
+        ast.write_serializers(forwarding_fp, fpc)
+        ast.write_deserializers(forwarding_fp, fpc)
         fp.write(f"using {body_type_name} = {ast.name};\n")
 
     responses = data.get("responses", {})
@@ -458,9 +460,9 @@ def generated_types(
         body = resp.get("body", {})
         ast = generate_type_as_single_string(body, type_dict)
         ast.normalize()
-        ast.write_types(forwarding_fp)
-        ast.write_serializers(forwarding_fp)
-        ast.write_deserializers(forwarding_fp)
+        ast.write_types(forwarding_fp, fpc)
+        ast.write_serializers(forwarding_fp, fpc)
+        ast.write_deserializers(forwarding_fp, fpc)
         fp.write(f"using {rc} = {ast.name};\n")
         all_replies += comma + rc
         comma = ", "
@@ -469,36 +471,38 @@ def generated_types(
     method_data.response_type_name = rt
     fp.write(f"using {rt} = std::variant<std::monostate, {all_replies}>;\n")
 
-    fp.write("\n")
-    fp.write(f"static std::string serialize_response(const {rt}& response) {{\n")
-    fp.write("	if (std::holds_alternative<std::monostate>(response)) {\n")
-    fp.write('		return "{}";\n')
-    fp.write("	}\n")
+    fp.write(f"static std::string serialize_response(const {rt}& response);\n")
+    fpc.write("\n")
+    fpc.write(f"std::string Endpoint::serialize_response(const {rt}& response) {{\n")
+    fpc.write("	if (std::holds_alternative<std::monostate>(response)) {\n")
+    fpc.write('		return "{}";\n')
+    fpc.write("	}\n")
     ix = 1
     for code in method_data.responses:
         rc = method_data.responses[code]
-        fp.write(f"	if (response.index() == {ix}) {{\n")
-        fp.write(f"		const auto& r = std::get<{ix}>(response);\n")
-        fp.write("		return serialize(r);\n")
-        fp.write("	}\n")
+        fpc.write(f"	if (response.index() == {ix}) {{\n")
+        fpc.write(f"		const auto& r = std::get<{ix}>(response);\n")
+        fpc.write("		return serialize(r);\n")
+        fpc.write("	}\n")
         ix += 1
-    fp.write('	return "";\n')
-    fp.write("}\n")
-    fp.write("\n")
+    fpc.write('	return "";\n')
+    fpc.write("}\n")
+    fpc.write("\n")
 
-    fp.write(f"static http::StatusCode get_status_code(const {rt}& response) {{\n")
-    fp.write("	if (std::holds_alternative<std::monostate>(response)) {\n")
-    fp.write("		return http::StatusCode::INTERNAL_SERVER_ERROR;\n")
-    fp.write("	}\n")
+    fp.write(f"static http::StatusCode get_status_code(const {rt}& response);\n")
+    fpc.write(f"http::StatusCode Endpoint::get_status_code(const {rt}& response) {{\n")
+    fpc.write("	if (std::holds_alternative<std::monostate>(response)) {\n")
+    fpc.write("		return http::StatusCode::INTERNAL_SERVER_ERROR;\n")
+    fpc.write("	}\n")
     ix = 1
     for code in method_data.responses:
         rc = method_data.responses[code]
-        fp.write(f"	if (response.index() == {ix}) {{\n")
-        fp.write(f"		return static_cast<http::StatusCode>({code});\n")
-        fp.write("	}\n")
+        fpc.write(f"	if (response.index() == {ix}) {{\n")
+        fpc.write(f"		return static_cast<http::StatusCode>({code});\n")
+        fpc.write("	}\n")
         ix += 1
-    fp.write("	return http::StatusCode::INTERNAL_SERVER_ERROR;\n")
-    fp.write("}\n")
+    fpc.write("	return http::StatusCode::INTERNAL_SERVER_ERROR;\n")
+    fpc.write("}\n")
 
 
 def is_method_name(p: str) -> bool:
@@ -517,11 +521,15 @@ def generate_endpoint(
     forwarding_fp = open(forwarding_fpname, "w")
     #forwarding_fp.write("#pragma once\n\n")
     forwarding_fp.write("\n")
-    filename = f"gen/{basename}_{safe_path(elt)}.hpp"
-    ep = Endpoint(filename, elt, data)
+    header_filename = f"gen/{basename}_{safe_path(elt)}.hpp"
+    impl_filename = f"gen/{basename}_{safe_path(elt)}.cpp"
+    ep = Endpoint(header_filename, impl_filename, elt, data)
     all_endpoints.append(ep)
 
-    fp = open(filename, "w")
+    fpc = open(impl_filename, "w")
+    fpc.write(f'#include "{header_filename}"\n')
+
+    fp = open(header_filename, "w")
     fp.write("#pragma once\n\n")
     fp.write("#include <slogger/ILogger.hpp>\n")
     fp.write("#include <http/base_endpoint.hpp>\n\n")
@@ -539,6 +547,8 @@ def generate_endpoint(
     fp.write(f"// description: {data.get('description', '')}\n")
 
     fp.write(f"namespace {basename}::{safe_path(elt)}\n {{\n")
+    fpc.write(f"namespace {basename}::{safe_path(elt)}\n {{\n")
+
     fp.write("class Endpoint : public http::BaseEndpoint {\n")
     fp.write("public:\n")
     fp.write(f'static constexpr const char* BASE_URI = "{base_uri.replace('{version}', 'v1.3')}";\n')
@@ -550,7 +560,7 @@ def generate_endpoint(
     for p in data:
         p = p.lower()
         if is_method_name(p):
-            generated_types(fp, data[p], elt, type_dict, forwarding_fp, p, ep)
+            generated_types(fp, fpc, data[p], elt, type_dict, forwarding_fp, p, ep)
     fp.write("\n")
 
     fp.write(
@@ -585,48 +595,54 @@ def generate_endpoint(
         fp.write("\n")
 
         fp.write(
-            f"void get_reply_{p}(const std::string& endpoint, const std::string& payload, const http::URLParameters& params, http::reply_handler_t handler) {{\n"
+            f"void get_reply_{p}(const std::string& endpoint, const std::string& payload, const http::URLParameters& params, http::reply_handler_t handler);\n"
         )
-        fp.write(
+        fpc.write(
+            f"void Endpoint::get_reply_{p}(const std::string& endpoint, const std::string& payload, const http::URLParameters& params, http::reply_handler_t handler) {{\n"
+        )
+        fpc.write(
             f'		fprintf(stderr, "deserialize {elt} - %s, %s\\n", endpoint.c_str(), payload.c_str());\n'
         )
 
         body = ""
 
         if m.body_type_name is not None:
-            fp.write(f"		{m.body_type_name} body;\n")
-            fp.write("		json data;\n")
-            fp.write("	    try {\n")
-            fp.write("	       data = json::parse(payload);\n")
-            fp.write("	    } catch (json::parse_error& ex) {\n")
-            fp.write(
+            fpc.write(f"		{m.body_type_name} body;\n")
+            fpc.write("		json data;\n")
+            fpc.write("	    try {\n")
+            fpc.write("	       data = json::parse(payload);\n")
+            fpc.write("	    } catch (json::parse_error& ex) {\n")
+            fpc.write(
                 '			handler(http::HandlerResult{http::create_json_error_msg(std::format("json structure not ok: {}", ex.what())), http::StatusCode::BAD_REQUEST});\n'
             )
-            fp.write("	        return;\n")
-            fp.write("	    }\n")
+            fpc.write("	        return;\n")
+            fpc.write("	    }\n")
 
-            fp.write("		try {\n")
-            fp.write("			deserialize(body, data);\n")
-            fp.write("		} catch (ParseError& e) {\n")
-            fp.write(
+            fpc.write("		try {\n")
+            fpc.write("			deserialize(body, data);\n")
+            fpc.write("		} catch (ParseError& e) {\n")
+            fpc.write(
                 '			handler(http::HandlerResult{http::create_json_error_msg("json structure not ok"), http::StatusCode::BAD_REQUEST});\n'
             )
-            fp.write("	        return;\n")
-            fp.write("		}\n")
+            fpc.write("	        return;\n")
+            fpc.write("		}\n")
             body = "body,"
         else:
-            fp.write("		// No body for this method\n")
+            fpc.write("		// No body for this method\n")
             body = ""
 
-        fp.write(f"		handle_{p}(params, {body} [handler](const {m.response_type_name}& reply_payload) {{\n")
-        fp.write("          auto hr = http::HandlerResult{serialize_response(reply_payload), get_status_code(reply_payload)};\n")
-        fp.write("          handler(hr);\n")
-        fp.write("		});\n")
-        fp.write("	}\n")
+        fpc.write(f"		handle_{p}(params, {body} [handler](const {m.response_type_name}& reply_payload) {{\n")
+        fpc.write("          auto hr = http::HandlerResult{serialize_response(reply_payload), get_status_code(reply_payload)};\n")
+        fpc.write("          handler(hr);\n")
+        fpc.write("		});\n")
+        fpc.write("	}\n")
 
-    fp.write("};\n")
-    fp.write("}\n")
+    fp.write("}; // Endpoint class\n")
+    fp.write("} // namespace\n")
     fp.close()
+
+    fpc.write("} // namespace\n")
+    fpc.close()
 
     forwarding_fp.close()
 
@@ -641,6 +657,68 @@ def generate_type_list(data: dict, type_dict: Dict[str, dict]):
     for elt in data:
         # log.info(f" Type: {elt} = {data[elt]}")
         type_dict[elt] = data[elt]
+
+def generate_all_endpoints_header(all_endpoints: List[Endpoint]):
+    fp = open(f"gen/all_endpoints-{basename}.hpp", "w")
+    fp.write("#pragma once\n\n")
+    fp.write("// Auto-generated file including all endpoint headers\n\n")
+    fp.write("#include <http/base_endpoint.hpp>\n\n")
+    for f in all_endpoints:
+        fp.write(f'#include "{f.header_file}"\n')
+
+    fp.write("\n")
+    fp.write(f"namespace {basename} {{\n")
+    fp.write("class AllEndpoints {\n")
+    fp.write("public:\n")
+    for endpoint in all_endpoints:
+        elt = safe_path(endpoint.path)
+        fp.write(f"    {elt}::Endpoint endpoint_{elt};\n")
+
+    fp.write(
+        "AllEndpoints(logging::ILogger& logger, const std::shared_ptr<model::Node>& model)\n"
+    )
+    comma = ":"
+    for endpoint in all_endpoints:
+        elt = safe_path(endpoint.path)
+        fp.write(f"   {comma} endpoint_{elt}(logger, model)\n")
+        comma = ", "
+    fp.write("{}\n")
+    fp.write("\n")
+
+    fp.write("	void register_endpoints(http::HttpServer& http_server);\n")
+    fp.write("};\n")
+    fp.write(f"}} // namespace {basename}\n")
+    fp.close()
+
+
+def generate_all_endpoints_impl(all_endpoints: List[Endpoint], base_uri:str):
+    fpc = open(f"gen/all_endpoints-{basename}.cpp", "w")
+    fpc.write(f"#include <gen/all_endpoints-{basename}.hpp>\n")
+    for f in all_endpoints:
+        fpc.write(f'#include "{f.impl_file}"\n')
+    fpc.write(f"namespace {basename} {{\n")
+    fpc.write("void AllEndpoints::register_endpoints(http::HttpServer& http_server) {\n")
+    for endpoint in all_endpoints:
+        elt = safe_path(endpoint.path)
+        for method_data in endpoint.methods:
+            method = method_data.name
+            fpc.write(
+                f'		 http_server.register_endpoint_handler("{base_uri}{endpoint.path}", http::HttpMethod::{method},\n'
+            )
+            fpc.write(
+                "			[this](const std::string& endpoint, const std::string& payload, const http::URLParameters& params, http::reply_handler_t reply_handler) {\n"
+            )
+            fpc.write(
+                "				endpoint_"
+                + elt
+                + ".get_reply_"
+                + method.lower()
+                + "(endpoint, payload, params, reply_handler);\n"
+            )
+            fpc.write("			});\n\n")
+    fpc.write("}\n")
+    fpc.write(f"}} // namespace {basename}\n")
+    fpc.close()
 
 
 def main():
@@ -685,57 +763,10 @@ def main():
             log.warning(f"Skipping non-endpoint top-level element: {elt}")
 
     log.info("generating files")
-    # Generate all_endpoints.hpp
-    fp = open(f"gen/all_endpoints-{basename}.hpp", "w")
-    fp.write("#pragma once\n\n")
-    fp.write("// Auto-generated file including all endpoint headers\n\n")
-    fp.write("#include <http/base_endpoint.hpp>\n\n")
-    for f in all_endpoints:
-        fp.write(f'#include "{f.file}"\n')
 
-    fp.write("\n")
-    fp.write(f"namespace {basename} {{\n")
-    fp.write("class AllEndpoints {\n")
-    fp.write("public:\n")
-    for endpoint in all_endpoints:
-        elt = safe_path(endpoint.path)
-        fp.write(f"    {elt}::Endpoint endpoint_{elt};\n")
+    generate_all_endpoints_header(all_endpoints)
+    generate_all_endpoints_impl(all_endpoints, base_uri)
 
-    fp.write(
-        "AllEndpoints(logging::ILogger& logger, const std::shared_ptr<model::Node>& model)\n"
-    )
-    comma = ":"
-    for endpoint in all_endpoints:
-        elt = safe_path(endpoint.path)
-        fp.write(f"   {comma} endpoint_{elt}(logger, model)\n")
-        comma = ", "
-    fp.write("{}\n")
-    fp.write("\n")
-
-    fp.write("	void register_endpoints(http::HttpServer& http_server) {\n")
-    for endpoint in all_endpoints:
-        elt = safe_path(endpoint.path)
-        for method_data in endpoint.methods:
-            method = method_data.name
-            fp.write(
-                f'		 http_server.register_endpoint_handler("{base_uri}{endpoint.path}", http::HttpMethod::{method},\n'
-            )
-            fp.write(
-                "			[this](const std::string& endpoint, const std::string& payload, const http::URLParameters& params, http::reply_handler_t reply_handler) {\n"
-            )
-            fp.write(
-                "				endpoint_"
-                + elt
-                + ".get_reply_"
-                + method.lower()
-                + "(endpoint, payload, params, reply_handler);\n"
-            )
-            fp.write("			});\n\n")
-
-    fp.write("}\n")
-    fp.write("};\n")
-    fp.write(f"}} // namespace {basename}\n")
-    fp.close()
 
 
 main()
