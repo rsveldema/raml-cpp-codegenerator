@@ -119,6 +119,8 @@ def generate_type_struct_body(body, props, type_dict) -> ASTType:
     ix = 0
     for prop in props:
         prop_body = props[prop]
+        if prop.startswith("^(0|([1-9]"):
+            prop = 'positive_integer'
         eltType = generate_type_as_single_string(prop_body, type_dict)
         member = ASTMember(str(prop), eltType)
 
@@ -169,6 +171,9 @@ def generate_type_struct(body: dict, type_dict: Dict[str, dict]) -> ASTType:
                 elt = pattern[k]
                 if "type" in elt and elt["type"] == "object":
                     contains_object = elt
+                elif "properties" in elt:
+                    contains_object = elt
+
             if contains_object:
                 k = generate_type_pattern_body(
                     pattern,
@@ -187,6 +192,11 @@ def generate_type_struct(body: dict, type_dict: Dict[str, dict]) -> ASTType:
             elt = pattern[k]
             if "type" in elt and elt["type"] == "object":
                 contains_object = elt
+            elif "properties" in elt:
+                contains_object = elt
+            elif "patternProperties" in elt:
+                contains_object = elt["patternProperties"]
+
         if contains_object:
             return generate_type_pattern_body(
                 pattern,
@@ -234,6 +244,10 @@ def generate_type_pattern_body(
     ix = 0
     for prop in props:
         prop_body = props[prop]
+        if prop.startswith("^(0|([1-9]"):
+            prop = 'positive_integer'
+        if prop.startswith("^[a-zA-Z0-9"):
+            prop = 'identifier'
         eltType = generate_type_as_single_string(prop_body, type_dict)
         member = ASTMember(str(prop), eltType)
 
@@ -327,7 +341,6 @@ def generate_type_as_single_string(body, type_dict: Dict[str, dict]) -> ASTType:
         else:
             return ASTType(ASTNodeEnum.STRING, "format")
 
-
     if "not" in body:
         fmt = body["not"]
         return ASTType(ASTNodeEnum.STRING, "not")
@@ -352,6 +365,10 @@ def generate_type_as_single_string(body, type_dict: Dict[str, dict]) -> ASTType:
             return generate_allof(allof, type_dict)
         if "minProperties" in body:
             return ASTType(ASTNodeEnum.EMPTY, "minProperties")
+        if "properties" in body:
+            ret = generate_type_struct(body, type_dict)
+            log.debug(f"generate_type_struct: object type generated: {ret}")
+            return ret
         raise RuntimeError(f"generate_type_as_single_string: no type in body: {body}")
 
     t = body["type"]
@@ -371,6 +388,14 @@ def generate_type_as_single_string(body, type_dict: Dict[str, dict]) -> ASTType:
             ret.generated_serializer_already = True
             ret.add_member(ASTMember("__field0", ASTType(ASTNodeEnum.STRING, "")))
             ret.add_member(ASTMember("__field1", ASTType(ASTNodeEnum.BOOLEAN, "")))
+            return ret
+        case ["integer", "null"]:
+            ret = ASTType(ASTNodeEnum.ONE_OF, "oneof_int_null")
+            # we generate this one by hand:
+            ret.generated_deserializer_already = True
+            ret.generated_serializer_already = True
+            ret.add_member(ASTMember("__field0", ASTType(ASTNodeEnum.INTEGER, "")))
+            ret.add_member(ASTMember("__field1", ASTType(ASTNodeEnum.NULL, "")))
             return ret
         case ["string", "null"]:
             ret = ASTType(ASTNodeEnum.ONE_OF, "oneof_str_null")

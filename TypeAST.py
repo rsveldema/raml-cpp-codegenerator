@@ -514,6 +514,7 @@ class ASTType:
         fpc.write('    ret += comma;\n')
         fpc.write('    ret += "\\""+key+"\\":{\";\n')
         fpc.write('    const char* comma2 = "";\n')
+        fpc.write('    [[maybe_unused]] int ix = 0;\n')
         fpc.write('    for (const auto& val : values) {\n')
         fpc.write('      ret += comma2;\n')
         ix = 0;
@@ -521,7 +522,10 @@ class ASTType:
         for elt in self.members:
             fpc.write(f'      case {ix}: {{\n')
             fpc.write(f'         const auto val_str = serialize(std::get<{ix}>(val));\n')
-            fpc.write(f'         ret += "\\"{elt.name}\\":" + val_str;\n')
+            if elt.name == "positive_integer":
+                fpc.write(f'         ret += "\\"" + std::to_string(ix++) + "\\":" + val_str;\n')
+            else:
+                fpc.write(f'         ret += "\\"{elt.name}\\":" + val_str;\n')
             fpc.write('          comma2 = ", ";\n')
             fpc.write('          break;\n')
             fpc.write('      }\n')
