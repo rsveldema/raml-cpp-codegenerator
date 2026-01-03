@@ -120,19 +120,21 @@ def generate_type_struct_body(body, props, type_dict) -> ASTType:
     for prop in props:
         prop_body = props[prop]
         if prop.startswith("^(0|([1-9]"):
-            prop = 'positive_integer'
+            prop = "positive_integer"
         eltType = generate_type_as_single_string(prop_body, type_dict)
         member = ASTMember(str(prop), eltType)
 
         if "default" in prop_body:
-            member.default_value = prop_body['default']
+            member.default_value = prop_body["default"]
 
         ret.add_member(member)
         ix += 1
     return ret
 
 
-def generate_type_allof_or_anyof_body(body, props, type_dict, tt: ASTNodeEnum) -> ASTType:
+def generate_type_allof_or_anyof_body(
+    body, props, type_dict, tt: ASTNodeEnum
+) -> ASTType:
     assert isinstance(props, list)
 
     ret = ASTType(tt, "allof") if tt == ASTNodeEnum.ALL_OF else ASTType(tt, "anyof")
@@ -149,10 +151,14 @@ def generate_type_allof_or_anyof_body(body, props, type_dict, tt: ASTNodeEnum) -
 def generate_type_struct(body: dict, type_dict: Dict[str, dict]) -> ASTType:
     if "allOf" in body:
         props = body["allOf"]
-        return generate_type_allof_or_anyof_body(body, props, type_dict, ASTNodeEnum.ALL_OF)
+        return generate_type_allof_or_anyof_body(
+            body, props, type_dict, ASTNodeEnum.ALL_OF
+        )
     elif "anyOf" in body:
         props = body["anyOf"]
-        return generate_type_allof_or_anyof_body(body, props, type_dict, ASTNodeEnum.ANY_OF)
+        return generate_type_allof_or_anyof_body(
+            body, props, type_dict, ASTNodeEnum.ANY_OF
+        )
     elif "oneOf" in body:
         props = body["oneOf"]
         return generate_oneof(props, type_dict)
@@ -186,7 +192,9 @@ def generate_type_struct(body: dict, type_dict: Dict[str, dict]) -> ASTType:
     elif "patternProperties" in body:
         pattern = body["patternProperties"]
         if "properties" in body:
-            log.warning("Both patternProperties and properties found, using patternProperties")
+            log.warning(
+                "Both patternProperties and properties found, using patternProperties"
+            )
         contains_object = None
         for k in pattern:
             elt = pattern[k]
@@ -216,18 +224,24 @@ def generate_type_struct(body: dict, type_dict: Dict[str, dict]) -> ASTType:
 def generate_anyof(anyof, type_dict) -> ASTType:
     # return generate_type_struct(body=anyof, type_dict=type_dict, forwarding_fp=forwarding_fp, ctxt=ctxt)
     props = anyof
-    return generate_type_allof_or_anyof_body(anyof, props, type_dict, ASTNodeEnum.ANY_OF)
+    return generate_type_allof_or_anyof_body(
+        anyof, props, type_dict, ASTNodeEnum.ANY_OF
+    )
+
 
 def generate_allof(allof, type_dict) -> ASTType:
     # return generate_type_struct(body=anyof, type_dict=type_dict, forwarding_fp=forwarding_fp, ctxt=ctxt)
     props = allof
-    return generate_type_allof_or_anyof_body(allof, props, type_dict, ASTNodeEnum.ALL_OF)
+    return generate_type_allof_or_anyof_body(
+        allof, props, type_dict, ASTNodeEnum.ALL_OF
+    )
+
 
 def generate_type_pattern_body(
-                pattern,
-                pattern_props,
-                type_dict,
-            ) -> ASTType:
+    pattern,
+    pattern_props,
+    type_dict,
+) -> ASTType:
     """
     Example:
     "patternProperties": {
@@ -235,8 +249,8 @@ def generate_type_pattern_body(
           "type": "object",
     """
 
-    props = pattern_props # pattern_props.get("properties", {})
-    if 'type' in props:
+    props = pattern_props  # pattern_props.get("properties", {})
+    if "type" in props:
         props = pattern_props.get("properties", {})
 
     assert isinstance(props, dict)
@@ -245,17 +259,20 @@ def generate_type_pattern_body(
     for prop in props:
         prop_body = props[prop]
         if prop.startswith("^(0|([1-9]"):
-            prop = 'positive_integer'
+            prop = "positive_integer"
         if prop.startswith("^[a-zA-Z0-9"):
-            prop = 'identifier'
+            prop = "identifier"
         eltType = generate_type_as_single_string(prop_body, type_dict)
         member = ASTMember(str(prop), eltType)
 
-        log.info(f"generate_type_pattern_body: adding member {member.name} of type {eltType.t}")
+        log.info(
+            f"generate_type_pattern_body: adding member {member.name} of type {eltType.t}"
+        )
 
         ret.add_member(member)
         ix += 1
     return ret
+
 
 def generate_oneof(oneof, type_dict: Dict[str, dict]) -> ASTType:
     ix = 0
@@ -378,8 +395,12 @@ def generate_type_as_single_string(body, type_dict: Dict[str, dict]) -> ASTType:
             # we generate this one by hand:
             ret.generated_deserializer_already = True
             ret.generated_serializer_already = True
-            ret.add_member(ASTMember("__field0", ASTType(ASTNodeEnum.INTEGER, "tuple_int")))
-            ret.add_member(ASTMember("__field1", ASTType(ASTNodeEnum.STRING, "tuple_str")))
+            ret.add_member(
+                ASTMember("__field0", ASTType(ASTNodeEnum.INTEGER, "tuple_int"))
+            )
+            ret.add_member(
+                ASTMember("__field1", ASTType(ASTNodeEnum.STRING, "tuple_str"))
+            )
             return ret
         case ["string", "boolean"]:
             ret = ASTType(ASTNodeEnum.ONE_OF, "oneof_str_bool")
@@ -447,7 +468,7 @@ def generated_types(
     type_dict: Dict[str, dict],
     forwarding_fp,
     method: str,
-    ep: Endpoint
+    ep: Endpoint,
 ):
     method_data = Method(method.upper(), data)
     ep.methods.append(method_data)
@@ -490,18 +511,21 @@ def generated_types(
         ast = ast.normalize()
 
         if ast.name == "pattern_props_activation_action_2":
-            log.info(f"Generated AST for response {code} of method {method} at endpoint {elt}: {ast}")
+            log.info(
+                f"Generated AST for response {code} of method {method} at endpoint {elt}: {ast}"
+            )
             last = ast
         if ast.name == "pattern_props_activation_action_3":
             assert last is not None
             assert ast.equals(last)
-            log.info(f"Generated AST for response of method {method} at endpoint {elt}: {ast}")
-           
+            log.info(
+                f"Generated AST for response of method {method} at endpoint {elt}: {ast}"
+            )
 
         ast.write_types(forwarding_fp, fpc)
         ast.write_serializers(forwarding_fp, fpc)
         ast.write_deserializers(forwarding_fp, fpc)
-        fp.write(f"using {rc} = {ast.name};\n")
+        fp.write(f"struct {rc} : public {ast.name} {{ }};\n")
         all_replies += comma + rc
         comma = ", "
         method_data.responses[code] = rc
@@ -511,7 +535,9 @@ def generated_types(
 
     fp.write(f"static std::string serialize_response_{method}(const {rt}& response);\n")
     fpc.write("\n")
-    fpc.write(f"std::string Endpoint::serialize_response_{method}(const {rt}& response) {{\n")
+    fpc.write(
+        f"std::string Endpoint::serialize_response_{method}(const {rt}& response) {{\n"
+    )
     fpc.write("	if (std::holds_alternative<std::monostate>(response)) {\n")
     fpc.write('		return "{}";\n')
     fpc.write("	}\n")
@@ -527,8 +553,12 @@ def generated_types(
     fpc.write("}\n")
     fpc.write("\n")
 
-    fp.write(f"static http::StatusCode get_status_code_{method}(const {rt}& response);\n")
-    fpc.write(f"http::StatusCode Endpoint::get_status_code_{method}(const {rt}& response) {{\n")
+    fp.write(
+        f"static http::StatusCode get_status_code_{method}(const {rt}& response);\n"
+    )
+    fpc.write(
+        f"http::StatusCode Endpoint::get_status_code_{method}(const {rt}& response) {{\n"
+    )
     fpc.write("	if (std::holds_alternative<std::monostate>(response)) {\n")
     fpc.write("		return http::StatusCode::INTERNAL_SERVER_ERROR;\n")
     fpc.write("	}\n")
@@ -549,7 +579,11 @@ def is_method_name(p: str) -> bool:
 
 
 def generate_endpoint(
-    elt: str, data: dict, all_endpoints: List[Endpoint], type_dict: Dict[str, dict], base_uri: str
+    elt: str,
+    data: dict,
+    all_endpoints: List[Endpoint],
+    type_dict: Dict[str, dict],
+    base_uri: str,
 ):
     log.info(f"Generating endpoint for {elt}")
 
@@ -557,7 +591,10 @@ def generate_endpoint(
 
     forwarding_fpname = f"gen/forward_decls_{basename}_{safe_path(elt)}.hpp"
     forwarding_fp = open(forwarding_fpname, "w")
-    #forwarding_fp.write("#pragma once\n\n")
+    forwarding_fp.write(f"// GENERATED CODE, DO NOT EDIT\n\n")
+    forwarding_fp.write(f"// Forward declarations for endpoint {elt}\n\n")
+
+    # forwarding_fp.write("#pragma once\n\n")
     forwarding_fp.write("\n")
     header_filename = f"gen/{basename}_{safe_path(elt)}.hpp"
     impl_filename = f"gen/{basename}_{safe_path(elt)}.cpp"
@@ -565,9 +602,11 @@ def generate_endpoint(
     all_endpoints.append(ep)
 
     fpc = open(impl_filename, "w")
+    fpc.write(f"// GENERATED CODE, DO NOT EDIT\n\n")
     fpc.write(f'#include "{header_filename}"\n')
 
     fp = open(header_filename, "w")
+    fp.write(f"// GENERATED CODE, DO NOT EDIT\n\n")
     fp.write("#pragma once\n\n")
     fp.write("#include <slogger/ILogger.hpp>\n")
     fp.write("#include <http/base_endpoint.hpp>\n\n")
@@ -589,7 +628,9 @@ def generate_endpoint(
 
     fp.write("class Endpoint : public http::BaseEndpoint {\n")
     fp.write("public:\n")
-    fp.write(f'static constexpr const char* BASE_URI = "{base_uri.replace('{version}', 'v1.3')}";\n')
+    fp.write(
+        f'static constexpr const char* BASE_URI = "{base_uri.replace("{version}", "v1.3")}";\n'
+    )
 
     fp.write("#include <http/base_serializers.hpp>\n")
     fp.write(f"#include <{forwarding_fpname}>\n")
@@ -619,7 +660,9 @@ def generate_endpoint(
         p = m.name.lower()
         fp.write("\n")
 
-        fp.write(f"	using reply_func_{p}_t = std::function<void({m.response_type_name})>;\n")
+        fp.write(
+            f"	using reply_func_{p}_t = std::function<void({m.response_type_name})>;\n"
+        )
 
         if m.body_type_name is not None:
             fp.write(
@@ -639,7 +682,7 @@ def generate_endpoint(
             f"void Endpoint::get_reply_{p}(const std::string& endpoint, const std::string& payload, const http::URLParameters& params, http::reply_handler_t handler) {{\n"
         )
         fpc.write(
-            f'		LOG_INFO(get_logger(), "deserialize {elt.replace("{", "*").replace("}", "*")} - {{}}, {{}}", endpoint, payload);\n'
+            f'		LOG_DEBUG(get_logger(), "deserialize {elt.replace("{", "*").replace("}", "*")} - {{}}, payload: {{}}", endpoint, payload);\n'
         )
 
         body = ""
@@ -669,8 +712,12 @@ def generate_endpoint(
             fpc.write("		// No body for this method\n")
             body = ""
 
-        fpc.write(f"		handle_{p}(params, {body} [handler](const {m.response_type_name}& reply_payload) {{\n")
-        fpc.write(f"          auto hr = http::HandlerResult{{serialize_response_{p}(reply_payload), get_status_code_{p}(reply_payload)}};\n")
+        fpc.write(
+            f"		handle_{p}(params, {body} [handler](const {m.response_type_name}& reply_payload) {{\n"
+        )
+        fpc.write(
+            f"          auto hr = http::HandlerResult{{serialize_response_{p}(reply_payload), get_status_code_{p}(reply_payload)}};\n"
+        )
         fpc.write("          handler(hr);\n")
         fpc.write("		});\n")
         fpc.write("	}\n")
@@ -696,8 +743,10 @@ def generate_type_list(data: dict, type_dict: Dict[str, dict]):
         # log.info(f" Type: {elt} = {data[elt]}")
         type_dict[elt] = data[elt]
 
+
 def generate_all_endpoints_header(all_endpoints: List[Endpoint]):
     fp = open(f"gen/all_endpoints-{basename}.hpp", "w")
+    fp.write(f"// GENERATED CODE, DO NOT EDIT\n\n")
     fp.write("#pragma once\n\n")
     fp.write("// Auto-generated file including all endpoint headers\n\n")
     fp.write("#include <http/base_endpoint.hpp>\n\n")
@@ -729,13 +778,16 @@ def generate_all_endpoints_header(all_endpoints: List[Endpoint]):
     fp.close()
 
 
-def generate_all_endpoints_impl(all_endpoints: List[Endpoint], base_uri:str):
+def generate_all_endpoints_impl(all_endpoints: List[Endpoint], base_uri: str):
     fpc = open(f"gen/all_endpoints-{basename}.cpp", "w")
+    fpc.write(f"// GENERATED CODE, DO NOT EDIT\n\n")
     fpc.write(f"#include <gen/all_endpoints-{basename}.hpp>\n")
     for f in all_endpoints:
         fpc.write(f'#include "{f.impl_file}"\n')
     fpc.write(f"namespace {basename} {{\n")
-    fpc.write("void AllEndpoints::register_endpoints(http::HttpServer& http_server) {\n")
+    fpc.write(
+        "void AllEndpoints::register_endpoints(http::HttpServer& http_server) {\n"
+    )
     for endpoint in all_endpoints:
         elt = safe_path(endpoint.path)
         for method_data in endpoint.methods:
@@ -804,7 +856,6 @@ def main():
 
     generate_all_endpoints_header(all_endpoints)
     generate_all_endpoints_impl(all_endpoints, base_uri)
-
 
 
 main()

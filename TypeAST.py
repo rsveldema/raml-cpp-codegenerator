@@ -7,30 +7,32 @@ log = logging.getLogger("yaml")
 MAX_MEMBERS_BEFORE_SHORTENING_STRUCT_NAMES = 3
 MAX_TYPE_NAME_LENGTH = 32
 
+
 def shorten(s):
     """
     shorten foo_bar to fb
 
     :param s: Description
     """
-    ix = s.find('_')
+    ix = s.find("_")
     if ix > 0 and ((ix + 1) < len(s)):
         s = s[0] + s[ix + 1]
 
-    s = s.replace(':', '')
+    s = s.replace(":", "")
 
-    if s=="stdstring":
+    if s == "stdstring":
         s = "string"
-    if s=="wwwRegEx":
+    if s == "wwwRegEx":
         s = "regEx"
 
     if len(s) > MAX_TYPE_NAME_LENGTH:
         s = s[0:MAX_TYPE_NAME_LENGTH]
 
     if s.endswith("_"):
-        s = s[0:len(s)-1]
+        s = s[0 : len(s) - 1]
 
     return s
+
 
 class ASTNodeEnum(Enum):
     EMPTY = "EMPTY"
@@ -48,7 +50,7 @@ class ASTNodeEnum(Enum):
     ENUM_ENTRY = "ENUM_ENTRY"
     REG_EX = "REG_EX"
     KEY_VALUE_SET = "KEY_VALUE_SET"
-    NULL = "NULL",
+    NULL = ("NULL",)
     HOSTNAME = "HOSTNAME"
     IPV4 = "IPV4"
     IPV6 = "IPV6"
@@ -73,13 +75,13 @@ class ASTMember:
 
 enum_name_map: Dict[str, int] = {}
 global_counter = 0
-unique_enums: List['ASTType'] = []
-unique_objects: List['ASTType'] = []
-unique_anyofs: List['ASTType'] = []
-unique_allofs: List['ASTType'] = []
-unique_patterns: List['ASTType'] = []
-unique_oneofs: List['ASTType'] = []
-unique_arrays: List['ASTType'] = []
+unique_enums: List["ASTType"] = []
+unique_objects: List["ASTType"] = []
+unique_anyofs: List["ASTType"] = []
+unique_allofs: List["ASTType"] = []
+unique_patterns: List["ASTType"] = []
+unique_oneofs: List["ASTType"] = []
+unique_arrays: List["ASTType"] = []
 
 
 def reset_global_state():
@@ -95,7 +97,7 @@ def reset_global_state():
     unique_arrays.clear()
 
 
-def register_unique_enum(t: 'ASTType') -> 'ASTType':
+def register_unique_enum(t: "ASTType") -> "ASTType":
     assert t.t == ASTNodeEnum.ENUM
     for uniq in unique_enums:
         if uniq.equals(t):
@@ -105,7 +107,7 @@ def register_unique_enum(t: 'ASTType') -> 'ASTType':
     return t
 
 
-def register_unique_object(t: 'ASTType') -> 'ASTType':
+def register_unique_object(t: "ASTType") -> "ASTType":
     assert t.t == ASTNodeEnum.OBJECT
     for uniq in unique_objects:
         if uniq.equals(t):
@@ -114,7 +116,7 @@ def register_unique_object(t: 'ASTType') -> 'ASTType':
     return t
 
 
-def register_unique_anyof(t: 'ASTType') -> 'ASTType':
+def register_unique_anyof(t: "ASTType") -> "ASTType":
     assert t.t == ASTNodeEnum.ANY_OF
     for uniq in unique_anyofs:
         if uniq.equals(t):
@@ -123,7 +125,7 @@ def register_unique_anyof(t: 'ASTType') -> 'ASTType':
     return t
 
 
-def register_unique_allof(t: 'ASTType') -> 'ASTType':
+def register_unique_allof(t: "ASTType") -> "ASTType":
     assert t.t == ASTNodeEnum.ALL_OF
     for uniq in unique_allofs:
         if uniq.equals(t):
@@ -132,7 +134,7 @@ def register_unique_allof(t: 'ASTType') -> 'ASTType':
     return t
 
 
-def register_unique_pattern(t: 'ASTType') -> 'ASTType':
+def register_unique_pattern(t: "ASTType") -> "ASTType":
     assert t.t == ASTNodeEnum.PATTERN_PROPERTIES
     for uniq in unique_patterns:
         if uniq.equals(t):
@@ -141,7 +143,7 @@ def register_unique_pattern(t: 'ASTType') -> 'ASTType':
     return t
 
 
-def register_unique_oneof(t: 'ASTType') -> 'ASTType':
+def register_unique_oneof(t: "ASTType") -> "ASTType":
     assert t.t == ASTNodeEnum.ONE_OF
     for uniq in unique_oneofs:
         if uniq.equals(t):
@@ -150,7 +152,7 @@ def register_unique_oneof(t: 'ASTType') -> 'ASTType':
     return t
 
 
-def register_unique_array(t: 'ASTType') -> 'ASTType':
+def register_unique_array(t: "ASTType") -> "ASTType":
     assert t.t == ASTNodeEnum.ARRAY
     for uniq in unique_arrays:
         if uniq.equals(t):
@@ -200,10 +202,12 @@ def generate_type_name(t: ASTNodeEnum, prefix: str) -> str:
             """
             return t.name
 
+
 def value_to_c(v) -> str:
     if isinstance(v, bool):
         return "true" if v else "false"
     return f"{v}"
+
 
 class ASTType:
     def __init__(self, t: ASTNodeEnum, prefix: str):
@@ -212,8 +216,8 @@ class ASTType:
         self.name = generate_type_name(t, prefix)
         self.members: List[ASTMember] = []
         self.generated_type_already = False
-        self.generated_serializer_already =  False
-        self.generated_deserializer_already =  False
+        self.generated_serializer_already = False
+        self.generated_deserializer_already = False
         self.assigned_new_name = False
         self.anonymous = False
 
@@ -263,9 +267,9 @@ class ASTType:
                     k += elt.type.name[0]
 
         if k.endswith("_"):
-            k = k[0:len(k)-1]
+            k = k[0 : len(k) - 1]
 
-        if len(k)>MAX_TYPE_NAME_LENGTH:
+        if len(k) > MAX_TYPE_NAME_LENGTH:
             k = k[0:MAX_TYPE_NAME_LENGTH]
 
         if k in enum_name_map:
@@ -278,7 +282,6 @@ class ASTType:
 
     def normalize_obj(self):
         self.compute_new_name(from_name=True)
-
 
     def normalize_array(self):
         for elt in self.members:
@@ -293,7 +296,7 @@ class ASTType:
     def normalize_pattern(self):
         for elt in self.members:
             elt.type.flatten()
-        #self.single_inline()
+        # self.single_inline()
         self.compute_new_name(from_name=False)
 
     def single_inline(self):
@@ -305,7 +308,7 @@ class ASTType:
                 if p.type.anonymous:
                     new_members.extend(p.type.members)
                     continue
-            #if p.type.t == ASTNodeEnum.PATTERN_PROPERTIES:
+            # if p.type.t == ASTNodeEnum.PATTERN_PROPERTIES:
             #    if p.type.anonymous:
             #        new_members.extend(p.type.members)
             #        continue
@@ -326,13 +329,11 @@ class ASTType:
         self.single_inline()
         self.compute_new_name(from_name=False)
 
-
     def normalize_all_of(self):
         for elt in self.members:
             elt.type.flatten()
         self.single_inline()
         self.compute_new_name(from_name=False)
-
 
     def normalize_enum(self):
         pass
@@ -347,8 +348,8 @@ class ASTType:
             else:
                 enum_name += elt.name[0]
 
-        if enum_name.endswith('_'):
-            enum_name = enum_name[0:len(enum_name)-1]
+        if enum_name.endswith("_"):
+            enum_name = enum_name[0 : len(enum_name) - 1]
 
         if enum_name in enum_name_map:
             enum_name_map[enum_name] += 1
@@ -364,7 +365,7 @@ class ASTType:
             m1.type.fix_members_with_same_name_different_types()
 
             # in the is-8 RAWL there is a 'action:' property name...
-            m1.name = m1.name.replace(':', '')
+            m1.name = m1.name.replace(":", "")
 
             for k in range(i + 1, len(self.members)):
                 m2 = self.members[k]
@@ -411,7 +412,7 @@ class ASTType:
             case _:
                 pass
 
-    def remove_duplicate_types(self) -> 'ASTType':
+    def remove_duplicate_types(self) -> "ASTType":
         for m in self.members:
             m.type = m.type.remove_duplicate_types()
 
@@ -431,7 +432,7 @@ class ASTType:
             return register_unique_array(self)
         return self
 
-    def normalize(self) -> 'ASTType':
+    def normalize(self) -> "ASTType":
         self.flatten()
         if self.t == ASTNodeEnum.ALL_OF:
             print(self)
@@ -458,9 +459,13 @@ class ASTType:
             init = ""
             if elt.default_value != None:
                 init = value_to_c(elt.default_value)
-                fp.write(f"\t{elt.type.name} _{elt.name} = {init}; // {elt.orig_name}\n")
+                fp.write(
+                    f"\t{elt.type.name} _{elt.name} = {init}; // {elt.orig_name}\n"
+                )
             else:
-                fp.write(f"\tstd::optional<{elt.type.name}> _{elt.name};  // {elt.orig_name}\n")
+                fp.write(
+                    f"\tstd::optional<{elt.type.name}> _{elt.name};  // {elt.orig_name}\n"
+                )
 
         fp.write(f"}}; // {self.name}\n\n")
 
@@ -475,7 +480,9 @@ class ASTType:
 
         fp.write(f"struct {self.name} {{\n")
         for elt in self.members:
-            fp.write(f"\tstd::optional<{elt.type.name}> _{elt.name}; // {elt.orig_name}\n")
+            fp.write(
+                f"\tstd::optional<{elt.type.name}> _{elt.name}; // {elt.orig_name}\n"
+            )
         fp.write(f"}}; // {self.name}\n\n")
 
     def generate_pattern(self, fp, fpc):
@@ -486,7 +493,9 @@ class ASTType:
             elt_names += f"{comma}{elt.type.name}"
             comma = ", "
 
-        fp.write(f"using {self.name} = std::map<std::string, std::vector<std::variant<{elt_names}>>>;\n")
+        fp.write(
+            f"using {self.name} = std::map<std::string, std::vector<std::variant<{elt_names}>>>;\n"
+        )
 
     def generate_allof(self, fp, fpc):
         for elt in self.members:
@@ -538,10 +547,10 @@ class ASTType:
             fp.write(f"static std::string serialize(const {self.name}& );\n")
             fpc.write(f"std::string Endpoint::serialize(const {self.name}& ) {{\n")
             fpc.write("  // type has no members\n")
-            fpc.write("  return \"{}\";\n")
+            fpc.write('  return "{}";\n')
             fpc.write("}\n")
             fpc.write("\n")
-            return;
+            return
 
         for elt in self.members:
             elt.type.write_serializers(fp, fpc)
@@ -549,26 +558,30 @@ class ASTType:
         fp.write(f"static std::string serialize(const {self.name}& obj);\n")
         fpc.write(f"std::string Endpoint::serialize(const {self.name}& obj) {{\n")
 
-        fpc.write('  std::string ret;\n')
-        fpc.write('  std::string comma;\n')
+        fpc.write("  std::string ret;\n")
+        fpc.write("  std::string comma;\n")
 
         if self.is_inline():
             for elt in self.members:
-                fpc.write(f'  if (const auto k = serialize(obj._{elt.name}); k != "") {{\n')
-                fpc.write('     ret += comma;\n')
+                fpc.write(
+                    f'  if (const auto k = serialize(obj._{elt.name}); k != "") {{\n'
+                )
+                fpc.write("     ret += comma;\n")
                 fpc.write('     comma = ", ";\n')
-                fpc.write(f'     ret += k;\n')
-                fpc.write('  }\n')
+                fpc.write(f"     ret += k;\n")
+                fpc.write("  }\n")
         else:
             fpc.write('  ret += "{";\n')
             for elt in self.members:
-                fpc.write(f'  if (const auto k = serialize(obj._{elt.name}); k != "") {{\n')
-                fpc.write('     ret += comma;\n')
+                fpc.write(
+                    f'  if (const auto k = serialize(obj._{elt.name}); k != "") {{\n'
+                )
+                fpc.write("     ret += comma;\n")
                 fpc.write('     comma = ", ";\n')
-                fpc.write(f'     ret += "\\\"{elt.orig_name}\\\":" + k;\n')
-                fpc.write('  }\n')
+                fpc.write(f'     ret += "\\"{elt.orig_name}\\":" + k;\n')
+                fpc.write("  }\n")
             fpc.write('  ret += "}";\n')
-        fpc.write('  return ret;\n')
+        fpc.write("  return ret;\n")
         fpc.write("}\n")
         fpc.write("\n")
 
@@ -589,35 +602,41 @@ class ASTType:
         fpc.write(f"std::string Endpoint::serialize(const {self.name}& map) {{\n")
         fpc.write('  std::string ret = "{";\n')
         fpc.write('  const char* comma = "";\n')
-        fpc.write('  for (const auto& [key, values] : map) {\n')
-        fpc.write('    ret += comma;\n')
-        fpc.write('    ret += "\\""+key+"\\":{\";\n')
+        fpc.write("  for (const auto& [key, values] : map) {\n")
+        fpc.write("    ret += comma;\n")
+        fpc.write('    ret += "\\""+key+"\\":{";\n')
         fpc.write('    const char* comma2 = "";\n')
-        fpc.write('    [[maybe_unused]] int ix = 0;\n')
-        fpc.write('    for (const auto& val : values) {\n')
-        fpc.write('      ret += comma2;\n')
-        ix = 0;
-        fpc.write('      switch (val.index()) {\n')
+        fpc.write("    [[maybe_unused]] int ix = 0;\n")
+        fpc.write("    for (const auto& val : values) {\n")
+        fpc.write("      ret += comma2;\n")
+        ix = 0
+        fpc.write("      switch (val.index()) {\n")
         for elt in self.members:
-            fpc.write(f'      case {ix}: {{\n')
-            fpc.write(f'         const auto val_str = serialize(std::get<{ix}>(val));\n')
+            fpc.write(f"      case {ix}: {{\n")
+            fpc.write(
+                f"         const auto val_str = serialize(std::get<{ix}>(val));\n"
+            )
             if elt.name == "positive_integer":
-                fpc.write(f'         ret += "\\"" + std::to_string(ix++) + "\\":" + val_str;\n')
+                fpc.write(
+                    f'         ret += "\\"" + std::to_string(ix++) + "\\":" + val_str;\n'
+                )
             else:
                 fpc.write(f'         ret += "\\"{elt.name}\\":" + val_str;\n')
             fpc.write('          comma2 = ", ";\n')
-            fpc.write('          break;\n')
-            fpc.write('      }\n')
+            fpc.write("          break;\n")
+            fpc.write("      }\n")
             ix += 1
-        fpc.write(f'          default: fprintf(stderr, "variant default case: {self.name}\\n"); abort();\n')
-        fpc.write('      } // switch\n')
-        #fcp.write('    ret += "}";\n')
+        fpc.write(
+            f'          default: fprintf(stderr, "variant default case: {self.name}\\n"); abort();\n'
+        )
+        fpc.write("      } // switch\n")
+        # fcp.write('    ret += "}";\n')
         fpc.write('    comma = ", ";\n')
         fpc.write("  } // for values\n")
         fpc.write('  ret += "}";\n')
         fpc.write("  } // for map\n")
         fpc.write('  ret += "}";\n')
-        fpc.write('  return ret;\n')
+        fpc.write("  return ret;\n")
         fpc.write("}\n")
         fpc.write("\n")
 
@@ -627,19 +646,17 @@ class ASTType:
 
         fp.write(f"static std::string serialize(const {self.name}& obj);\n")
         fpc.write(f"std::string Endpoint::serialize(const {self.name}& obj) {{\n")
-        fpc.write('  switch(obj.index()) {\n')
+        fpc.write("  switch(obj.index()) {\n")
 
         for i in range(len(self.members)):
             m = self.members[i]
-            fpc.write(f'  case {i}: \n')
-            fpc.write(f'      return serialize(std::get<{i}>(obj));\n')
+            fpc.write(f"  case {i}: \n")
+            fpc.write(f"      return serialize(std::get<{i}>(obj));\n")
 
         fpc.write("  }\n")
         fpc.write('  INTERNAL_ERROR("internal error");\n')
         fpc.write("}\n")
         fpc.write("\n")
-
-
 
     def generate_enum_serializer(self, fp, fpc):
         fp.write(f"static std::string serialize(const {self.name}& obj);\n")
@@ -647,7 +664,9 @@ class ASTType:
         fpc.write("  switch (obj) {\n")
         for elt in self.members:
             value = elt.value
-            fpc.write(f'      case {self.name}::e_{elt.name}: return "\\"{value}\\"";\n')
+            fpc.write(
+                f'      case {self.name}::e_{elt.name}: return "\\"{value}\\"";\n'
+            )
         fpc.write("  }\n")
         fpc.write('  return "internal error: enum not in case list";\n')
         fpc.write("}\n")
@@ -687,7 +706,6 @@ class ASTType:
                 return False
         return False
 
-
     def generate_obj_deserializer(self, fp, fpc):
         assert self.t != ASTNodeEnum.ANY_OF
 
@@ -706,17 +724,21 @@ class ASTType:
                 fpc.write(
                     f"	obj._{elt.name} = decltype(obj._{elt.name})::value_type {{}};\n"
                 )
-                fpc.write(f'	deserialize(obj._{elt.name}.value(), payload);\n')
+                fpc.write(f"	deserialize(obj._{elt.name}.value(), payload);\n")
             else:
                 fpc.write(f'  if (payload.contains("{elt.orig_name}")) {{\n')
                 if elt.default_value == None:
                     fpc.write(
                         f"	obj._{elt.name} = decltype(obj._{elt.name})::value_type {{}};\n"
                     )
-                    fpc.write(f'	deserialize(obj._{elt.name}.value(), payload["{elt.orig_name}"]);\n')
+                    fpc.write(
+                        f'	deserialize(obj._{elt.name}.value(), payload["{elt.orig_name}"]);\n'
+                    )
                 else:
-                    fpc.write(f'	deserialize(obj._{elt.name}, payload["{elt.orig_name}"]);\n')
-                fpc.write('   }\n')
+                    fpc.write(
+                        f'	deserialize(obj._{elt.name}, payload["{elt.orig_name}"]);\n'
+                    )
+                fpc.write("   }\n")
         fpc.write("}\n")
         fpc.write("\n")
 
@@ -732,17 +754,21 @@ class ASTType:
             f" [[maybe_unused]] void Endpoint::deserialize([[maybe_unused]] {self.name}& pattern_obj, [[maybe_unused]] const json& pattern_payload) {{\n"
         )
 
-        fpc.write('  for (auto pit = pattern_payload.begin(); pit != pattern_payload.end(); ++pit) {\n')
-        fpc.write(f'{self.name}::mapped_type values;\n')
+        fpc.write(
+            "  for (auto pit = pattern_payload.begin(); pit != pattern_payload.end(); ++pit) {\n"
+        )
+        fpc.write(f"{self.name}::mapped_type values;\n")
 
         for elt in self.members:
-            fpc.write(f'  if (const auto& found = pit->find("{elt.name}"); found != pit->end()) {{\n')
-            fpc.write(f'    {elt.type.name} val {{}};\n')
-            fpc.write('    deserialize(val, *found);\n')
-            fpc.write('    values.push_back(val);\n')
+            fpc.write(
+                f'  if (const auto& found = pit->find("{elt.name}"); found != pit->end()) {{\n'
+            )
+            fpc.write(f"    {elt.type.name} val {{}};\n")
+            fpc.write("    deserialize(val, *found);\n")
+            fpc.write("    values.push_back(val);\n")
             fpc.write("  }\n")
 
-        fpc.write(f'    pattern_obj[pit.key()] = values;\n')
+        fpc.write(f"    pattern_obj[pit.key()] = values;\n")
         fpc.write("} // pit\n")
         fpc.write("}\n")
         fpc.write("\n")
@@ -771,19 +797,23 @@ class ASTType:
                 fpc.write(
                     f"	obj._{elt.name} = decltype(obj._{elt.name})::value_type {{}};\n"
                 )
-                fpc.write(f'	deserialize(obj._{elt.name}.value(), payload);\n')
-                fpc.write(f'	done = true;\n')
-                fpc.write('	}\n')
+                fpc.write(f"	deserialize(obj._{elt.name}.value(), payload);\n")
+                fpc.write(f"	done = true;\n")
+                fpc.write("	}\n")
             else:
                 fpc.write(f'  if (payload.contains("{elt.orig_name}")) {{\n')
                 if elt.default_value == None:
                     fpc.write(
                         f"	obj._{elt.name} = decltype(obj._{elt.name})::value_type {{}};\n"
                     )
-                    fpc.write(f'	deserialize(obj._{elt.name}.value(), payload["{elt.orig_name}"]);\n')
+                    fpc.write(
+                        f'	deserialize(obj._{elt.name}.value(), payload["{elt.orig_name}"]);\n'
+                    )
                 else:
-                    fpc.write(f'	deserialize(obj._{elt.name}, payload["{elt.orig_name}"]);\n')
-                fpc.write('   }\n')
+                    fpc.write(
+                        f'	deserialize(obj._{elt.name}, payload["{elt.orig_name}"]);\n'
+                    )
+                fpc.write("   }\n")
 
             fpc.write("  } catch (const ParseError& e) {\n")
             fpc.write(f"   obj._{elt.name} = std::nullopt;\n")
@@ -804,7 +834,7 @@ class ASTType:
         for elt in self.members:
             fpc.write(f'  if (payload.contains("{elt.name}")) {{\n')
             fpc.write(f'	    deserialize(obj._{elt.name}, payload["{elt.name}"]);\n')
-            fpc.write('   }\n')
+            fpc.write("   }\n")
         fpc.write("}\n")
         fpc.write("\n")
 
@@ -830,7 +860,6 @@ class ASTType:
         fpc.write(f'  THROW_ERROR("failed to parse {self.name}");\n')
         fpc.write("}\n")
         fpc.write("\n")
-
 
     def generate_enum_deserializer(self, fp, fpc):
         fp.write(
