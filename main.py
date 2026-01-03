@@ -471,6 +471,9 @@ def generated_types(
     assert len(responses) > 0, f"No responses defined for {elt}"
     all_replies = ""
     comma = ""
+
+    last = None
+
     for code in responses:
         resp = responses[code]
         rc = f"reply_{method}_{code}"
@@ -484,7 +487,17 @@ def generated_types(
         # allow serialization of responses:
         body = resp.get("body", {})
         ast = generate_type_as_single_string(body, type_dict)
-        ast.normalize()
+        ast = ast.normalize()
+
+        if ast.name == "pattern_props_activation_action_2":
+            log.info(f"Generated AST for response {code} of method {method} at endpoint {elt}: {ast}")
+            last = ast
+        if ast.name == "pattern_props_activation_action_3":
+            assert last is not None
+            assert ast.equals(last)
+            log.info(f"Generated AST for response of method {method} at endpoint {elt}: {ast}")
+           
+
         ast.write_types(forwarding_fp, fpc)
         ast.write_serializers(forwarding_fp, fpc)
         ast.write_deserializers(forwarding_fp, fpc)
@@ -496,9 +509,9 @@ def generated_types(
     method_data.response_type_name = rt
     fp.write(f"using {rt} = std::variant<std::monostate, {all_replies}>;\n")
 
-    fp.write(f"static std::string serialize_response(const {rt}& response);\n")
+    fp.write(f"static std::string serialize_response_{method}(const {rt}& response);\n")
     fpc.write("\n")
-    fpc.write(f"std::string Endpoint::serialize_response(const {rt}& response) {{\n")
+    fpc.write(f"std::string Endpoint::serialize_response_{method}(const {rt}& response) {{\n")
     fpc.write("	if (std::holds_alternative<std::monostate>(response)) {\n")
     fpc.write('		return "{}";\n')
     fpc.write("	}\n")
@@ -514,8 +527,8 @@ def generated_types(
     fpc.write("}\n")
     fpc.write("\n")
 
-    fp.write(f"static http::StatusCode get_status_code(const {rt}& response);\n")
-    fpc.write(f"http::StatusCode Endpoint::get_status_code(const {rt}& response) {{\n")
+    fp.write(f"static http::StatusCode get_status_code_{method}(const {rt}& response);\n")
+    fpc.write(f"http::StatusCode Endpoint::get_status_code_{method}(const {rt}& response) {{\n")
     fpc.write("	if (std::holds_alternative<std::monostate>(response)) {\n")
     fpc.write("		return http::StatusCode::INTERNAL_SERVER_ERROR;\n")
     fpc.write("	}\n")
@@ -626,7 +639,7 @@ def generate_endpoint(
             f"void Endpoint::get_reply_{p}(const std::string& endpoint, const std::string& payload, const http::URLParameters& params, http::reply_handler_t handler) {{\n"
         )
         fpc.write(
-            f'		fprintf(stderr, "deserialize {elt} - %s, %s\\n", endpoint.c_str(), payload.c_str());\n'
+            f'		LOG_INFO(get_logger(), "deserialize {elt.replace("{", "*").replace("}", "*")} - {{}}, {{}}", endpoint, payload);\n'
         )
 
         body = ""
@@ -657,7 +670,7 @@ def generate_endpoint(
             body = ""
 
         fpc.write(f"		handle_{p}(params, {body} [handler](const {m.response_type_name}& reply_payload) {{\n")
-        fpc.write("          auto hr = http::HandlerResult{serialize_response(reply_payload), get_status_code(reply_payload)};\n")
+        fpc.write(f"          auto hr = http::HandlerResult{{serialize_response_{p}(reply_payload), get_status_code_{p}(reply_payload)}};\n")
         fpc.write("          handler(hr);\n")
         fpc.write("		});\n")
         fpc.write("	}\n")

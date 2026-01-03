@@ -74,6 +74,12 @@ class ASTMember:
 enum_name_map: Dict[str, int] = {}
 global_counter = 0
 unique_enums: List['ASTType'] = []
+unique_objects: List['ASTType'] = []
+unique_anyofs: List['ASTType'] = []
+unique_allofs: List['ASTType'] = []
+unique_patterns: List['ASTType'] = []
+unique_oneofs: List['ASTType'] = []
+unique_arrays: List['ASTType'] = []
 
 
 def reset_global_state():
@@ -81,6 +87,12 @@ def reset_global_state():
     glob_counter = 0
     enum_name_map.clear()
     unique_enums.clear()
+    unique_objects.clear()
+    unique_anyofs.clear()
+    unique_allofs.clear()
+    unique_patterns.clear()
+    unique_oneofs.clear()
+    unique_arrays.clear()
 
 
 def register_unique_enum(t: 'ASTType') -> 'ASTType':
@@ -90,6 +102,60 @@ def register_unique_enum(t: 'ASTType') -> 'ASTType':
             return uniq
     unique_enums.append(t)
     t.give_enum_a_unique_name()
+    return t
+
+
+def register_unique_object(t: 'ASTType') -> 'ASTType':
+    assert t.t == ASTNodeEnum.OBJECT
+    for uniq in unique_objects:
+        if uniq.equals(t):
+            return uniq
+    unique_objects.append(t)
+    return t
+
+
+def register_unique_anyof(t: 'ASTType') -> 'ASTType':
+    assert t.t == ASTNodeEnum.ANY_OF
+    for uniq in unique_anyofs:
+        if uniq.equals(t):
+            return uniq
+    unique_anyofs.append(t)
+    return t
+
+
+def register_unique_allof(t: 'ASTType') -> 'ASTType':
+    assert t.t == ASTNodeEnum.ALL_OF
+    for uniq in unique_allofs:
+        if uniq.equals(t):
+            return uniq
+    unique_allofs.append(t)
+    return t
+
+
+def register_unique_pattern(t: 'ASTType') -> 'ASTType':
+    assert t.t == ASTNodeEnum.PATTERN_PROPERTIES
+    for uniq in unique_patterns:
+        if uniq.equals(t):
+            return uniq
+    unique_patterns.append(t)
+    return t
+
+
+def register_unique_oneof(t: 'ASTType') -> 'ASTType':
+    assert t.t == ASTNodeEnum.ONE_OF
+    for uniq in unique_oneofs:
+        if uniq.equals(t):
+            return uniq
+    unique_oneofs.append(t)
+    return t
+
+
+def register_unique_array(t: 'ASTType') -> 'ASTType':
+    assert t.t == ASTNodeEnum.ARRAY
+    for uniq in unique_arrays:
+        if uniq.equals(t):
+            return uniq
+    unique_arrays.append(t)
     return t
 
 
@@ -345,22 +411,35 @@ class ASTType:
             case _:
                 pass
 
-    def remove_duplicate_enums(self) -> 'ASTType':
+    def remove_duplicate_types(self) -> 'ASTType':
         for m in self.members:
-            m.type = m.type.remove_duplicate_enums()
+            m.type = m.type.remove_duplicate_types()
 
         if self.t == ASTNodeEnum.ENUM:
             return register_unique_enum(self)
+        if self.t == ASTNodeEnum.OBJECT:
+            return register_unique_object(self)
+        if self.t == ASTNodeEnum.ANY_OF:
+            return register_unique_anyof(self)
+        if self.t == ASTNodeEnum.ALL_OF:
+            return register_unique_allof(self)
+        if self.t == ASTNodeEnum.PATTERN_PROPERTIES:
+            return register_unique_pattern(self)
+        if self.t == ASTNodeEnum.ONE_OF:
+            return register_unique_oneof(self)
+        if self.t == ASTNodeEnum.ARRAY:
+            return register_unique_array(self)
         return self
 
-    def normalize(self):
+    def normalize(self) -> 'ASTType':
         self.flatten()
         if self.t == ASTNodeEnum.ALL_OF:
             print(self)
 
         self.remove_duplicate_members()
-        self.remove_duplicate_enums()
         self.fix_members_with_same_name_different_types()
+        ret = self.remove_duplicate_types()
+        return ret
 
     def generate_enum(self, fp, fpc):
         fp.write(f"enum class {self.name} {{\n")
