@@ -755,18 +755,35 @@ class ASTType:
         )
 
         fpc.write(
+            " if (!pattern_payload.is_object()) {\n"
+            "     THROW_ERROR(\"pattern passed is not an object\");\n"
+            "    } \n"
+        )
+        fpc.write(
             "  for (auto pit = pattern_payload.begin(); pit != pattern_payload.end(); ++pit) {\n"
         )
         fpc.write(f"{self.name}::mapped_type values;\n")
+        fpc.write(
+            "  for (auto nested = pit->begin(); nested != pit->end(); ++nested) {\n"
+        )
 
         for elt in self.members:
-            fpc.write(
-                f'  if (const auto& found = pit->find("{elt.name}"); found != pit->end()) {{\n'
-            )
+            if elt.name == 'positive_integer':                
+                fpc.write(
+                    '  if (is_positive_integer_as_string(nested.key())) {\n'
+                )
+            else:
+                fpc.write(
+                    f'  if (matches_regex("{elt.name}", nested.key())) {{\n'
+                )
             fpc.write(f"    {elt.type.name} val {{}};\n")
-            fpc.write("    deserialize(val, *found);\n")
+            fpc.write("    deserialize(val, nested.value());\n")
             fpc.write("    values.push_back(val);\n")
-            fpc.write("  }\n")
+            fpc.write("  } else { \n")
+            fpc.write("     THROW_ERROR(std::format(\"missing pattern property: {} for {}\", pit.key(), \"" + elt.name + "\"));\n")
+            fpc.write("  } \n")
+
+        fpc.write("} // nested\n")
 
         fpc.write(f"    pattern_obj[pit.key()] = values;\n")
         fpc.write("} // pit\n")

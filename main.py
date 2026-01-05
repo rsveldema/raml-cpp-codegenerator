@@ -703,7 +703,7 @@ def generate_endpoint(
             fpc.write("			deserialize(body, data);\n")
             fpc.write("		} catch (ParseError& e) {\n")
             fpc.write(
-                '			handler(http::HandlerResult{http::create_json_error_msg("json structure not ok"), http::StatusCode::BAD_REQUEST});\n'
+                '			handler(http::HandlerResult{http::create_json_error_msg(std::format("payload not ok: {}", e.what())), http::StatusCode::BAD_REQUEST});\n'
             )
             fpc.write("	        return;\n")
             fpc.write("		}\n")
