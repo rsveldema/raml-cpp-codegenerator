@@ -251,21 +251,27 @@ class ASTType:
                 from_name = True
 
         sep = ""
+
+        override = ""
         for elt in self.members:
             elt.type.flatten()
+            if elt.name.startswith("<identifier>"):
+                k = override = 'data'
 
-            if from_name:
-                if len(self.members) < MAX_MEMBERS_BEFORE_SHORTENING_STRUCT_NAMES:
-                    k += sep + shorten(elt.name)
-                    sep = "_"
+        if override == "":
+            for elt in self.members:
+                if from_name:
+                    if len(self.members) < MAX_MEMBERS_BEFORE_SHORTENING_STRUCT_NAMES:
+                        k += sep + shorten(elt.name)
+                        sep = "_"
+                    else:
+                        k += elt.name[0]
                 else:
-                    k += elt.name[0]
-            else:
-                if len(self.members) < MAX_MEMBERS_BEFORE_SHORTENING_STRUCT_NAMES:
-                    k += sep + shorten(elt.type.name)
-                    sep = "_"
-                else:
-                    k += elt.type.name[0]
+                    if len(self.members) < MAX_MEMBERS_BEFORE_SHORTENING_STRUCT_NAMES:
+                        k += sep + shorten(elt.type.name)
+                        sep = "_"
+                    else:
+                        k += elt.type.name[0]
 
         if k.endswith("_"):
             k = k[0 : len(k) - 1]
@@ -486,7 +492,7 @@ class ASTType:
             )
         fp.write(f"}}; // {self.name}\n\n")
 
-    def generate_pattern(self, fp, fpc):        
+    def generate_pattern(self, fp, fpc):
         assert len(self.members) == 1, "only single pattern properties supported"
         elt = self.members[0]
         elt.type.write_types(fp, fpc)
@@ -498,6 +504,11 @@ class ASTType:
     def generate_allof(self, fp, fpc):
         for elt in self.members:
             elt.type.write_types(fp, fpc)
+
+        for elt in self.members:
+            if elt.name.startswith("<identifier>"):
+                fp.write(f"\tusing {self.name} = {elt.type.name};  // {elt.orig_name}\n")
+                return
 
         fp.write(f"struct {self.name} {{\n")
         for elt in self.members:
@@ -553,12 +564,15 @@ class ASTType:
         for elt in self.members:
             elt.type.write_serializers(fp, fpc)
 
+        for elt in self.members:
+            if elt.name.startswith("<identifier>"):
+                return
+
         fp.write(f"static std::string serialize(const {self.name}& obj);\n")
         fpc.write(f"std::string Endpoint::serialize(const {self.name}& obj) {{\n")
 
         fpc.write("  std::string ret;\n")
         fpc.write("  std::string comma;\n")
-
         if self.is_inline():
             for elt in self.members:
                 fpc.write(
@@ -736,7 +750,7 @@ class ASTType:
         )
 
         elt = self.members[0]
-        if elt.name == 'positive_integer':                
+        if elt.name == 'positive_integer':
             fpc.write(
                 '  if (is_positive_integer_as_string(pit.key())) {\n'
             )
@@ -807,12 +821,17 @@ class ASTType:
         for elt in self.members:
             elt.type.write_deserializers(fp, fpc)
 
+        for elt in self.members:
+            if elt.name.startswith("<identifier>"):
+                return
+
         fp.write(
             f" [[maybe_unused]] static void deserialize([[maybe_unused]] {self.name}& obj, [[maybe_unused]] const json& payload);\n"
         )
         fpc.write(
             f" [[maybe_unused]] void Endpoint::deserialize([[maybe_unused]] {self.name}& obj, [[maybe_unused]] const json& payload) {{\n"
         )
+
         for elt in self.members:
             fpc.write(f'  if (payload.contains("{elt.name}")) {{\n')
             fpc.write(f'	    deserialize(obj._{elt.name}, payload["{elt.name}"]);\n')

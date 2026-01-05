@@ -197,7 +197,7 @@ def generate_type_struct(body: dict, type_dict: Dict[str, dict]) -> ASTType:
             log.warning(
                 "Both patternProperties and properties found, using patternProperties"
             )
-        """ 
+        """
         contains_object = None
         for k in pattern:
             elt = pattern[k]
@@ -209,7 +209,7 @@ def generate_type_struct(body: dict, type_dict: Dict[str, dict]) -> ASTType:
                 contains_object = elt["patternProperties"]
         """
         contains_object = pattern
-        
+
         if contains_object:
             return generate_type_pattern_body(
                 pattern,
@@ -272,16 +272,16 @@ def generate_type_pattern_body(
     for prop in props:
         prop_body = props[prop]
         if prop.startswith("^(0|([1-9]"):
-            prop = "positive_integer"
+            prop = "<positive_integer>"
         if prop.startswith("^[a-zA-Z0-9"):
-            prop = "identifier"
+            prop = "<identifier>"
         eltType = generate_type_as_single_string(prop_body, type_dict)
         member = ASTMember(str(prop), eltType)
         elt.add_member(member)
         ix += 1
 
 
-    ret = ASTType(ASTNodeEnum.PATTERN_PROPERTIES, "pattern_props")    
+    ret = ASTType(ASTNodeEnum.PATTERN_PROPERTIES, "pattern_props")
     ret.pattern = get_pattern(pattern)
     ret.add_member(ASTMember("PATTERN_VALUE", elt))
     return ret
@@ -388,7 +388,7 @@ def generate_type_as_single_string(body, type_dict: Dict[str, dict]) -> ASTType:
             ret = ASTType(ASTNodeEnum.REG_EX, "regex")
             ret.add_member(ASTMember(fmt, ASTType(ASTNodeEnum.STRING, "regex")))
             return ret
-        
+
         if "patternProperties" in body:
             pattern = body["patternProperties"]
             contains_object = None
