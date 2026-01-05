@@ -190,11 +190,14 @@ def generate_type_struct(body: dict, type_dict: Dict[str, dict]) -> ASTType:
                 ret.add_member(member)
         return ret
     elif "patternProperties" in body:
+        # there's no 'properties', only patternProperties in the json
+
         pattern = body["patternProperties"]
         if "properties" in body:
             log.warning(
                 "Both patternProperties and properties found, using patternProperties"
             )
+        """ 
         contains_object = None
         for k in pattern:
             elt = pattern[k]
@@ -204,7 +207,9 @@ def generate_type_struct(body: dict, type_dict: Dict[str, dict]) -> ASTType:
                 contains_object = elt
             elif "patternProperties" in elt:
                 contains_object = elt["patternProperties"]
-
+        """
+        contains_object = pattern
+        
         if contains_object:
             return generate_type_pattern_body(
                 pattern,
@@ -236,6 +241,14 @@ def generate_allof(allof, type_dict) -> ASTType:
         allof, props, type_dict, ASTNodeEnum.ALL_OF
     )
 
+def get_pattern(pattern: dict) -> str:
+    # Assuming pattern is a dictionary with a single key representing the regex pattern
+    assert isinstance(pattern, dict)
+    for elt in pattern:
+        if elt.startswith("^"):
+            return elt
+    return ""
+
 
 def generate_type_pattern_body(
     pattern,
@@ -253,9 +266,9 @@ def generate_type_pattern_body(
     if "type" in props:
         props = pattern_props.get("properties", {})
 
-    assert isinstance(props, dict)
-    ret = ASTType(ASTNodeEnum.PATTERN_PROPERTIES, "pattern_props")
+    elt = ASTType(ASTNodeEnum.ALL_OF, "pattern_props")
     ix = 0
+    assert isinstance(props, dict)
     for prop in props:
         prop_body = props[prop]
         if prop.startswith("^(0|([1-9]"):
@@ -264,13 +277,13 @@ def generate_type_pattern_body(
             prop = "identifier"
         eltType = generate_type_as_single_string(prop_body, type_dict)
         member = ASTMember(str(prop), eltType)
-
-        log.info(
-            f"generate_type_pattern_body: adding member {member.name} of type {eltType.t}"
-        )
-
-        ret.add_member(member)
+        elt.add_member(member)
         ix += 1
+
+
+    ret = ASTType(ASTNodeEnum.PATTERN_PROPERTIES, "pattern_props")    
+    ret.pattern = get_pattern(pattern)
+    ret.add_member(ASTMember("PATTERN_VALUE", elt))
     return ret
 
 
@@ -375,6 +388,23 @@ def generate_type_as_single_string(body, type_dict: Dict[str, dict]) -> ASTType:
             ret = ASTType(ASTNodeEnum.REG_EX, "regex")
             ret.add_member(ASTMember(fmt, ASTType(ASTNodeEnum.STRING, "regex")))
             return ret
+        
+        if "patternProperties" in body:
+            pattern = body["patternProperties"]
+            contains_object = None
+            for k in pattern:
+                elt = pattern[k]
+                if "type" in elt and elt["type"] == "object":
+                    contains_object = elt
+                elif "properties" in elt:
+                    contains_object = elt["properties"]
+
+            assert contains_object is not None
+            return generate_type_pattern_body(
+                    pattern,
+                    contains_object,
+                    type_dict,
+                )
 
         if "allOf" in body:
             allof = body["allOf"]

@@ -220,6 +220,7 @@ class ASTType:
         self.generated_deserializer_already = False
         self.assigned_new_name = False
         self.anonymous = False
+        self.pattern = None
 
     def equals(self, other: "ASTType") -> bool:
         if self.t != other.t:
@@ -300,7 +301,7 @@ class ASTType:
         self.compute_new_name(from_name=False)
 
     def single_inline(self):
-        log.info("inlining: " + self.name)
+        log.debug("inlining: " + self.name)
         i = 0
         new_members = []
         for p in self.members:
@@ -485,16 +486,13 @@ class ASTType:
             )
         fp.write(f"}}; // {self.name}\n\n")
 
-    def generate_pattern(self, fp, fpc):
-        elt_names = ""
-        comma = ""
-        for elt in self.members:
-            elt.type.write_types(fp, fpc)
-            elt_names += f"{comma}{elt.type.name}"
-            comma = ", "
+    def generate_pattern(self, fp, fpc):        
+        assert len(self.members) == 1, "only single pattern properties supported"
+        elt = self.members[0]
+        elt.type.write_types(fp, fpc)
 
         fp.write(
-            f"using {self.name} = std::map<std::string, std::vector<std::variant<{elt_names}>>>;\n"
+            f"using {self.name} = std::map<std::string, {elt.type.name}>;\n"
         )
 
     def generate_allof(self, fp, fpc):
@@ -595,8 +593,9 @@ class ASTType:
         self._generic_serialize(fp, fpc)
 
     def generate_pattern_serializer(self, fp, fpc):
-        for elt in self.members:
-            elt.type.write_serializers(fp, fpc)
+        assert len(self.members) == 1, "only single pattern properties supported"
+        elt = self.members[0]
+        elt.type.write_serializers(fp, fpc)
 
         fp.write(f"static std::string serialize(const {self.name}& map);\n")
         fpc.write(f"std::string Endpoint::serialize(const {self.name}& map) {{\n")
@@ -604,36 +603,8 @@ class ASTType:
         fpc.write('  const char* comma = "";\n')
         fpc.write("  for (const auto& [key, values] : map) {\n")
         fpc.write("    ret += comma;\n")
-        fpc.write('    ret += "\\""+key+"\\":{";\n')
-        fpc.write('    const char* comma2 = "";\n')
-        fpc.write("    [[maybe_unused]] int ix = 0;\n")
-        fpc.write("    for (const auto& val : values) {\n")
-        fpc.write("      ret += comma2;\n")
-        ix = 0
-        fpc.write("      switch (val.index()) {\n")
-        for elt in self.members:
-            fpc.write(f"      case {ix}: {{\n")
-            fpc.write(
-                f"         const auto val_str = serialize(std::get<{ix}>(val));\n"
-            )
-            if elt.name == "positive_integer":
-                fpc.write(
-                    f'         ret += "\\"" + std::to_string(ix++) + "\\":" + val_str;\n'
-                )
-            else:
-                fpc.write(f'         ret += "\\"{elt.name}\\":" + val_str;\n')
-            fpc.write('          comma2 = ", ";\n')
-            fpc.write("          break;\n")
-            fpc.write("      }\n")
-            ix += 1
-        fpc.write(
-            f'          default: fprintf(stderr, "variant default case: {self.name}\\n"); abort();\n'
-        )
-        fpc.write("      } // switch\n")
-        # fcp.write('    ret += "}";\n')
+        fpc.write(f'         ret += "\\""+key+"\\":" + serialize(values);\n')
         fpc.write('    comma = ", ";\n')
-        fpc.write("  } // for values\n")
-        fpc.write('  ret += "}";\n')
         fpc.write("  } // for map\n")
         fpc.write('  ret += "}";\n')
         fpc.write("  return ret;\n")
@@ -743,8 +714,9 @@ class ASTType:
         fpc.write("\n")
 
     def generate_pattern_deserializer(self, fp, fpc):
-        for elt in self.members:
-            elt.type.write_deserializers(fp, fpc)
+        assert len(self.members) == 1, "only single pattern properties supported"
+        elt = self.members[0]
+        elt.type.write_deserializers(fp, fpc)
 
         fp.write(
             f" [[maybe_unused]] static void deserialize([[maybe_unused]] {self.name}& pattern_obj, [[maybe_unused]] const json& pattern_payload);\n"
@@ -762,30 +734,23 @@ class ASTType:
         fpc.write(
             "  for (auto pit = pattern_payload.begin(); pit != pattern_payload.end(); ++pit) {\n"
         )
-        fpc.write(f"{self.name}::mapped_type values;\n")
-        fpc.write(
-            "  for (auto nested = pit->begin(); nested != pit->end(); ++nested) {\n"
-        )
 
-        for elt in self.members:
-            if elt.name == 'positive_integer':                
-                fpc.write(
-                    '  if (is_positive_integer_as_string(nested.key())) {\n'
-                )
-            else:
-                fpc.write(
-                    f'  if (matches_regex("{elt.name}", nested.key())) {{\n'
-                )
-            fpc.write(f"    {elt.type.name} val {{}};\n")
-            fpc.write("    deserialize(val, nested.value());\n")
-            fpc.write("    values.push_back(val);\n")
-            fpc.write("  } else { \n")
-            fpc.write("     THROW_ERROR(std::format(\"missing pattern property: {} for {}\", pit.key(), \"" + elt.name + "\"));\n")
-            fpc.write("  } \n")
+        elt = self.members[0]
+        if elt.name == 'positive_integer':                
+            fpc.write(
+                '  if (is_positive_integer_as_string(pit.key())) {\n'
+            )
+        else:
+            fpc.write(
+                f'  if (matches_regex(R"({self.pattern})", pit.key())) {{\n'
+            )
+        fpc.write(f"    {elt.type.name} val {{}};\n")
+        fpc.write("    deserialize(val, pit.value());\n")
+        fpc.write(f"    pattern_obj[pit.key()] = val;\n")
+        fpc.write("  } else { \n")
+        fpc.write("     THROW_ERROR(std::format(\"missing pattern property: {} for {}\", pit.key(), \"" + elt.name + "\"));\n")
+        fpc.write("  } \n")
 
-        fpc.write("} // nested\n")
-
-        fpc.write(f"    pattern_obj[pit.key()] = values;\n")
         fpc.write("} // pit\n")
         fpc.write("}\n")
         fpc.write("\n")
