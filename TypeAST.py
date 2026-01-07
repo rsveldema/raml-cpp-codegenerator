@@ -394,7 +394,7 @@ class ASTType:
             while k < len(self.members):
                 m2 = self.members[k]
                 if m1.equals(m2):
-                    log.info(f"deleting duplicate member {m1.name} / {m1.orig_name}")
+                    log.debug(f"deleting duplicate member {m1.name} / {m1.orig_name}")
                     del self.members[k]
                     continue
                 k += 1
@@ -856,7 +856,7 @@ class ASTType:
             fpc.write("      obj = val;\n")
             fpc.write("      return;\n")
             fpc.write("  } catch (const ParseError& e) {\n")
-            fpc.write(f'       fprintf(stderr, "was not alt {elt.name}\\n");\n')
+            fpc.write(f'       fprintf(stderr, "was not alt {elt.name} when parsing: %s\\n", e.what());\n')
             fpc.write("  }\n")
         fpc.write(f'  THROW_ERROR("failed to parse {self.name}");\n')
         fpc.write("}\n")
