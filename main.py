@@ -647,6 +647,11 @@ def generate_endpoint(
     fp.write("#include <variant>\n")
     fp.write("#include <fstream>\n")
     fp.write("#include <stdexcept>\n")
+    fp.write("#include <iostream>\n")
+    fp.write("#include <string_view>\n")
+    fp.write("#include <print>\n")
+    fp.write("\n")
+
     fp.write("#include <nlohmann/json.hpp>\n")
     fp.write("using json = nlohmann::json;\n")
 
